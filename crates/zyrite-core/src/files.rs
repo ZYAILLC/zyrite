@@ -76,10 +76,7 @@ mod msg {
     }
 
     pub fn binary(path: &str) -> String {
-        trf!(
-            "Not a text file: {path}",
-            "不是文本文件：{path}"
-        )
+        trf!("Not a text file: {path}", "不是文本文件：{path}")
     }
 
     pub fn decode(path: &str, encoding: &str) -> String {
@@ -202,7 +199,11 @@ fn loaded(path: &Path, text: String, encoding: &str, meta: &fs::Metadata) -> Loa
 fn decode_auto(bytes: Vec<u8>, path: &Path) -> Result<(String, &'static str), FileError> {
     // UTF-16 有空字节，要在二进制判断之前按 BOM 认出来
     for enc in [UTF_16LE, UTF_16BE] {
-        let bom: &[u8] = if enc == UTF_16LE { &[0xff, 0xfe] } else { &[0xfe, 0xff] };
+        let bom: &[u8] = if enc == UTF_16LE {
+            &[0xff, 0xfe]
+        } else {
+            &[0xfe, 0xff]
+        };
         if bytes.starts_with(bom) {
             return enc
                 .decode_without_bom_handling_and_without_replacement(&bytes)
@@ -367,14 +368,18 @@ mod tests {
         let bin = dir.path().join("tool.bin");
         fs::write(&bin, b"MZ\x00\x01text").unwrap();
         assert!(matches!(read_text(&bin), Err(FileError::Binary(_))));
-        assert_eq!(serde_json::to_value(FileError::Binary("x".into())).unwrap()["kind"], "binary");
+        assert_eq!(
+            serde_json::to_value(FileError::Binary("x".into())).unwrap()["kind"],
+            "binary"
+        );
     }
 
     #[test]
     fn 识别_gbk_并按原编码写回() {
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("旧日志.txt");
-        let src = "服务器启动成功\r\n端口：8080\r\n警告：磁盘空间不足，请尽快清理旧的日志文件。\r\n";
+        let src =
+            "服务器启动成功\r\n端口：8080\r\n警告：磁盘空间不足，请尽快清理旧的日志文件。\r\n";
         let (gbk, _, _) = encoding_rs::GBK.encode(src);
         fs::write(&p, &gbk).unwrap();
         let loaded = read_text(&p).unwrap();
@@ -399,7 +404,10 @@ mod tests {
         let bytes: Vec<u8> = src.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
         fs::write(&p, &bytes).unwrap();
         let loaded = read_text(&p).unwrap();
-        assert_eq!((loaded.text.as_str(), loaded.encoding.as_str()), (src, "UTF-16LE"));
+        assert_eq!(
+            (loaded.text.as_str(), loaded.encoding.as_str()),
+            (src, "UTF-16LE")
+        );
         save_text_as(&p, &loaded.text, None, &loaded.encoding).unwrap();
         assert_eq!(fs::read(&p).unwrap(), bytes);
     }
@@ -411,7 +419,10 @@ mod tests {
         let (big5, _, _) = encoding_rs::BIG5.encode("繁體中文的說明文件");
         fs::write(&p, &big5).unwrap();
         let loaded = read_text_as(&p, "big5").unwrap();
-        assert_eq!((loaded.text.as_str(), loaded.encoding.as_str()), ("繁體中文的說明文件", "Big5"));
+        assert_eq!(
+            (loaded.text.as_str(), loaded.encoding.as_str()),
+            ("繁體中文的說明文件", "Big5")
+        );
         // 按 UTF-8 读不通：报 decode
         let err = read_text_as(&p, "utf-8").unwrap_err();
         assert_eq!(serde_json::to_value(&err).unwrap()["kind"], "decode");
