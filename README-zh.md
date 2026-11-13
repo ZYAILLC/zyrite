@@ -2,13 +2,84 @@
 
 <p align="center"><img src="apps/desktop/src-tauri/icons/icon.svg" width="112" height="112" alt="Zyrite logo"></p>
 
-# Zyrite（纸砚）
+<h1 align="center">Zyrite（纸砚）</h1>
 
-开源、免费的 Markdown 编辑器：写起来像 Typora，管理起来像轻量版 Obsidian，并且专门为 AI Agent 写出来的文档做了阅读、审阅和批注。
+<p align="center"><b>为审阅 AI Agent 写的文档而做的 Markdown 编辑器。</b><br>
+写起来像 Typora，管理起来像轻量版 Obsidian。免费、开源。</p>
 
-> 状态：编辑器、库、Agent 协作与 MCP、内置 AI、主题 / 图片 / 导出 / 快捷键都已完成，下一步 Beta 内测。
+<p align="center">
+  <a href="https://github.com/ZYAILLC/zyrite/actions/workflows/ci.yml"><img src="https://github.com/ZYAILLC/zyrite/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="许可证：Apache-2.0"></a>
+  <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey" alt="平台：macOS、Windows、Linux">
+</p>
 
-## 开发
+Claude Code、Cursor、Codex 这类编程 Agent 现在会写大量 Markdown：方案、规格、文档、笔记。Zyrite 是为这件事做的桌面编辑器：Agent 改了文件，你能看清改了哪些地方，按块接受或拒绝；想让它重写某一段，就在页边写条批注，Agent 通过 MCP 读到后去处理。文件始终是你自己磁盘上的普通 `.md`。
+
+> **状态：** 功能已完成，即将开始 Beta 内测。目前还没有正式版，见[下载](#下载)。
+
+## 功能
+
+### 审阅 Agent 的改动
+
+- **按块对比。** Agent 写文件时，不管是直接写磁盘还是通过 MCP，Zyrite 都会拿它和你上次确认的版本比较，标出每一处改动的块。
+- **逐处接受或拒绝**，也可以全部接受或全部拒绝。用 `⌥↑` / `⌥↓` 在改动之间跳转。
+- **正在写入提示。** 编辑器会跟着 Agent 正在写的那一块滚动。
+- **冲突处理。** Agent 的改动和你未保存的修改重叠时，可以打开并排合并视图，逐块选择保留哪一边。
+- **页边批注。** 选中文字写批注交给 Agent。批注存在 `.zyrite/` 里，不写进 Markdown 原文；Agent 通过 MCP 回复并更新状态。
+
+### 写作
+
+- **原文 + 预览两栏**，同步滚动。两栏都能关：只开原文是实时预览（CodeMirror 6），只开预览是所见即所得（ProseMirror）。
+- **保存不改动原文格式。** 所见即所得只重写你改过的块，列表符号、强调符号、缩进、换行符都沿用原文。改一个词，`git diff` 里就只有一行。
+- CommonMark + GFM（表格、任务列表、脚注）、KaTeX 公式、Mermaid 图、代码高亮、YAML frontmatter。
+- 兼容 Obsidian 语法：`[[双链]]`、`![[嵌入]]`、`#标签`、`> [!note]` callout、`==高亮==`。
+- 正则查找替换、多光标、专注模式、打字机模式。
+
+### 管理
+
+- 打开任意文件夹就是一个库：文件树、大纲，外部新增、修改、删除即时同步。
+- 输入 `[[` 补全笔记名。重命名或移动笔记时，可以一并更新所有指向它的链接。
+- 命令面板（`⌘K`）、快速打开（`⌘P`）、全文搜索（`⌘⇧F`）。搜索按子串匹配，中文不用分词也能搜到。
+- 同一个应用里有**简洁版**和**完整版**，`⌘⇧E` 一键切换，只想安静写字时用简洁版。
+
+### 接入 Agent（MCP）
+
+应用自带 `zyrite mcp`，是一个 stdio 传输的 MCP server。设置 › MCP 里有 Claude Code、Cursor、Codex 的配置，复制即可用。
+
+| 工具 | 作用 |
+| --- | --- |
+| `list_notes` | 列出笔记、标题和修改时间 |
+| `search_notes` | 全文搜索 |
+| `read_note` | 读取笔记原文和 frontmatter |
+| `write_note` | 提交改动，进入审阅队列，不直接写盘 |
+| `list_backlinks` | 反向链接及上下文 |
+| `get_annotations` | 读取页边批注 |
+| `reply_annotation` | 回复批注、更新状态 |
+
+程序第一次连接时，Zyrite 会询问你是否允许。授权按库保存，用存在系统钥匙串里的密钥签名。默认允许读取和提交改动，直接写盘默认关闭。
+
+### 内置 AI（自带模型）
+
+- 选中改写：润色、续写、缩写、翻译、改语气，或者自己写指令。结果流式显示在原文下方。
+- 支持任意 OpenAI 兼容接口（OpenAI、DeepSeek 等）和本地 Ollama 模型。key 存在系统钥匙串里，请求直接发给你的模型服务商，不经过任何 Zyrite 服务器。
+
+### 个性化
+
+- 内置三套主题：**冷白**（浅色）、**石墨**（深色）、**信号**（深色侧栏、浅色正文、琥珀色点缀）。深浅色可以跟随系统。
+- 可以导入 Typora 的 `.css` 主题。
+- 正文字号、行宽、行高可调，所有快捷键都能改。
+- 粘贴或拖入图片：按路径模板存到笔记旁边，或者通过 PicGo / PicList、自定义命令上传图床。
+- 导出 PDF、单文件 HTML、Word（`.docx`，不需要 pandoc）。
+- 界面默认英文，设置里可以切换为简体中文。
+
+## 下载
+
+目前还没有正式版。现在想试用可以：
+
+- **开发版：** `main` 分支每次推送都会打三平台安装包。打开最近一次成功的 [Build 运行记录](https://github.com/ZYAILLC/zyrite/actions/workflows/build.yml)，在 *Artifacts* 里下载对应平台的安装包（需要登录 GitHub）。安装包还没有代码签名，macOS 和 Windows 第一次打开时会有安全提示。
+- **从源码构建：** 见下文。
+
+## 从源码构建
 
 需要：
 
@@ -45,6 +116,10 @@ packages/themes/         3 套内置主题的 token（冷白、石墨、信号�
 tests/corpus/            保真回归语料
 .github/workflows/       CI 和三平台打包
 ```
+
+## 参与贡献
+
+欢迎提 Issue 和 Pull Request。提 PR 前请跑一遍 `pnpm test`、`pnpm typecheck`、`cargo test --workspace` 和 `cargo clippy`。改动面向用户的文案时，英文和简体中文要一起写。
 
 ## 许可证
 
