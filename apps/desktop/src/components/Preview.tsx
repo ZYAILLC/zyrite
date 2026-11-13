@@ -18,7 +18,7 @@ import { backend } from '../lib/backend';
 import { resolveEmbed } from '../lib/embeds';
 import { openLink } from '../lib/document';
 import { activeEditor, onEditorReady } from '../lib/editorRef';
-import { openWikiLink } from '../lib/linkIndex';
+import { linkStatus, openWikiLink } from '../lib/linkIndex';
 import { activeThemeId, useApp } from '../store';
 
 /** 公式、Mermaid、Graphviz 渲染结果的缓存：每次改动都整篇重新生成 HTML，没变的公式和图直接复用，不闪 */
@@ -74,6 +74,10 @@ function render(el: HTMLElement, markdown: string, filePath: string | null, isCu
   for (const span of el.querySelectorAll<HTMLElement>('span.wikilink.embed')) {
     const out = document.createElement('span');
     if (renderEmbed(out, span.dataset.value ?? span.dataset.target ?? '', resolveEmbed)) span.replaceWith(out);
+  }
+  // 链接到库里不存在的笔记：和编辑器一样显示成虚线
+  for (const a of el.querySelectorAll<HTMLElement>('a.wikilink')) {
+    if (linkStatus(a.dataset.target ?? '') === 'missing') a.classList.add('missing');
   }
   // `[TOC]` 目录、行内代码里颜色值的色块
   renderTocs(el);

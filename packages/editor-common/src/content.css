@@ -79,11 +79,14 @@
   padding-left: 22px;
 }
 
-#write li > p {
+/* 所见即所得的列表项多一层 div（内容容器），规则同时覆盖两种结构 */
+#write li > p,
+#write li > div > p {
   margin: 0;
 }
 
-#write li > :is(ul, ol) {
+#write li > :is(ul, ol),
+#write li > div > :is(ul, ol) {
   margin-bottom: 0;
 }
 
@@ -103,7 +106,8 @@
   cursor: pointer;
 }
 
-#write li.task-list-item[data-checked='true'] > p {
+#write li.task-list-item[data-checked='true'] > p,
+#write li.task-list-item[data-checked='true'] > div > p {
   color: var(--z-muted);
 }
 
@@ -218,6 +222,8 @@
 
 #write .zy-embed-body {
   display: block;
+  /* 所见即所得的编辑区是 pre-wrap，渲染出来的 HTML 里标签之间的换行不能显示成空行 */
+  white-space: normal;
 }
 
 /* 嵌入笔记里的标题缩小一些，不和外面的正文标题抢层级 */
@@ -440,6 +446,7 @@
   border: none;
   text-align: left;
   overflow-x: visible;
+  white-space: normal;
   cursor: text;
 }
 
