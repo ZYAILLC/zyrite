@@ -28,9 +28,13 @@ Claude Code、Cursor、Codex 这类编程 Agent 现在会写大量 Markdown：�
 
 - **原文 + 预览两栏**，同步滚动。两栏都能关：只开原文是实时预览（CodeMirror 6），只开预览是所见即所得（ProseMirror）。
 - **保存不改动原文格式。** 所见即所得只重写你改过的块，列表符号、强调符号、缩进、换行符都沿用原文。改一个词，`git diff` 里就只有一行。
-- CommonMark + GFM（表格、任务列表、脚注）、KaTeX 公式、Mermaid 图、代码高亮、YAML frontmatter。
-- 兼容 Obsidian 语法：`[[双链]]`、`![[嵌入]]`、`#标签`、`> [!note]` callout、`==高亮==`。
-- 正则查找替换、多光标、专注模式、打字机模式。
+- CommonMark + GFM（表格、任务列表、脚注）、YAML frontmatter，以及内联 HTML，比如彩色文字、`<kbd>`、`<details>`。
+- KaTeX 公式，包括化学式（`\ce{H2O}`）。
+- 图：Mermaid（流程图、时序图、思维导图、饼图、甘特图等）、Graphviz `dot`，以及用 Markdown 列表画的 Markmap 思维导图。全部本地渲染，不联网。
+- 100 多种语言的代码高亮；`#hex`、`rgb()` 这类颜色值后面显示色块；CSV、TSV 代码块显示成表格。
+- 兼容 Obsidian 语法：`[[双链]]`、`![[图片.png|200]]` 和 `![[笔记#某一节]]` 嵌入、`#标签`、`> [!note]` callout、`==高亮==`。
+- Emoji 短码（`:rocket:`）、上标（`x^2^`）、可选的下标（`H~2~O`）、`[TOC]` 目录、本地音视频。
+- 正则查找替换、多光标、专注模式、打字机模式，选中文字后可以直接改颜色。
 
 ![预览里的 Mermaid 思维导图、公式块和表格](docs/images/screenshot-diagrams.jpg)
 

@@ -28,9 +28,13 @@ Coding agents like Claude Code, Cursor and Codex now write a lot of Markdown: pl
 
 - **Source + preview side by side**, with synced scrolling. Close either pane: source-only gives you live preview (CodeMirror 6), preview-only gives you WYSIWYG (ProseMirror).
 - **Byte-faithful saving.** WYSIWYG rewrites only the blocks you edited and keeps your list markers, emphasis style, indentation and line endings. A one-word edit is a one-line `git diff`.
-- CommonMark + GFM (tables, task lists, footnotes), KaTeX math, Mermaid diagrams, syntax highlighting, YAML frontmatter.
-- Obsidian syntax: `[[wikilinks]]`, `![[embeds]]`, `#tags`, `> [!note]` callouts, `==highlights==`.
-- Regex find and replace, multiple cursors, focus mode, typewriter mode.
+- CommonMark + GFM (tables, task lists, footnotes), YAML frontmatter, and inline HTML such as colored text, `<kbd>` and `<details>`.
+- Math with KaTeX, including chemistry (`\ce{H2O}`).
+- Diagrams: Mermaid (flowcharts, sequence, mind maps, pie, gantt and more), Graphviz `dot`, and Markmap mind maps from Markdown lists. Everything renders offline.
+- Code highlighting for 100+ languages, color swatches after `#hex` / `rgb()` values, CSV and TSV blocks as tables.
+- Obsidian syntax: `[[wikilinks]]`, `![[image.png|200]]` and `![[note#section]]` embeds, `#tags`, `> [!note]` callouts, `==highlights==`.
+- Emoji shortcodes (`:rocket:`), superscript (`x^2^`), optional subscript (`H~2~O`), `[TOC]`, and local audio and video.
+- Regex find and replace, multiple cursors, focus mode, typewriter mode, and a Color button for selected text.
 
 ![Mermaid mind map, display math and a table in the preview](docs/images/screenshot-diagrams.jpg)
 
