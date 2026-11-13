@@ -1,6 +1,9 @@
 import { parseMarkdown, renderHtml } from '@zyrite/md-blocks';
 import type { Nodes, PhrasingContent, Table } from 'mdast';
+import { renderCsv } from './csv';
+import { renderGraphviz, renderMarkmap } from './diagrams';
 import { highlightCodeBlocks } from './highlight';
+import { createMedia, replaceMediaImages } from './media';
 import { renderMath, renderMermaid } from './render';
 import type { ResolveEmbed, ResolveUrl } from './types';
 
@@ -107,6 +110,8 @@ export function renderTableSource(source: string, resolveUrl?: ResolveUrl): HTML
 /** 返回的 Promise 在 Mermaid 图都画完后完成（导出时要等） */
 export function renderMarkdown(el: HTMLElement, markdown: string, resolveUrl?: ResolveUrl): Promise<void> {
   el.innerHTML = renderHtml(markdown);
+  // `![说明](clip.mp4)`：视频、音频显示播放器（要在下面改写图片地址之前）
+  replaceMediaImages(el, resolveUrl);
   if (resolveUrl) {
     for (const img of el.querySelectorAll('img')) {
       const src = img.getAttribute('src');
@@ -128,11 +133,30 @@ export function renderMarkdown(el: HTMLElement, markdown: string, resolveUrl?: R
     pending.push(renderMermaid(fig, code.textContent ?? ''));
     code.parentElement?.replaceWith(fig);
   }
+  for (const code of el.querySelectorAll<HTMLElement>('pre > code.language-dot, pre > code.language-graphviz')) {
+    const fig = document.createElement('div');
+    fig.className = 'zy-figure zy-graphviz';
+    pending.push(renderGraphviz(fig, code.textContent ?? ''));
+    code.parentElement?.replaceWith(fig);
+  }
+  for (const code of el.querySelectorAll<HTMLElement>('pre > code.language-markmap')) {
+    const fig = document.createElement('div');
+    fig.className = 'zy-figure zy-markmap';
+    // 先挂到页面上再画，Markmap 要量节点尺寸
+    code.parentElement?.replaceWith(fig);
+    pending.push(renderMarkmap(fig, code.textContent ?? ''));
+  }
+  for (const code of el.querySelectorAll<HTMLElement>('pre > code.language-csv, pre > code.language-tsv')) {
+    const fig = document.createElement('div');
+    fig.className = 'zy-figure zy-figure-plain zy-csv';
+    renderCsv(fig, code.textContent ?? '', code.classList.contains('language-tsv') ? '\t' : ',');
+    code.parentElement?.replaceWith(fig);
+  }
   return Promise.all(pending).then(() => undefined);
 }
 
 /**
- * 渲染 `![[…]]` 嵌入：图片直接显示，笔记显示成一段缩进的正文（标题 + 内容）。
+ * 渲染 `![[…]]` 嵌入：图片直接显示，视频、音频显示播放器，笔记显示成一段缩进的正文（标题 + 内容）。
  * 嵌入的笔记里再有嵌入时只显示成链接，不会无限套娃。返回 false 表示解析不了，调用方照常显示链接。
  */
 export function renderEmbed(el: HTMLElement, value: string, resolve: ResolveEmbed | undefined): boolean {
@@ -146,6 +170,11 @@ export function renderEmbed(el: HTMLElement, value: string, resolve: ResolveEmbe
     if (info.height) img.height = info.height;
     el.className = 'zy-embed zy-embed-image';
     el.replaceChildren(img);
+    return true;
+  }
+  if (info.kind === 'media') {
+    el.className = `zy-embed zy-embed-media zy-embed-${info.media}`;
+    el.replaceChildren(createMedia(info.media, info.src, info.alt, { width: info.width, height: info.height }));
     return true;
   }
   el.className = 'zy-embed zy-embed-note';

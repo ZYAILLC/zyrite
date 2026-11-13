@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { basename, dirname, isUrl, linkForFile, linkPath, relativePath, resolvePath } from './paths';
+import { mediaKind } from '@zyrite/editor-common';
+import { basename, dirname, isUrl, linkForFile, linkPath, MEDIA_EXT, relativePath, resolvePath } from './paths';
 
 describe('paths', () => {
   it('basename / dirname', () => {
@@ -51,5 +52,14 @@ describe('拖入文件生成链接', () => {
     expect(linkForFile('/a/c/方案.md', '/a/b/note.md')).toBe('[方案](../c/方案.md)');
     expect(linkForFile('/a/b/report (final).pdf', '/a/b/note.md')).toBe('[report (final).pdf](report%20%28final%29.pdf)');
     expect(linkForFile('/x/[draft].md', null)).toBe('[\\[draft\\]](/x/[draft].md)');
+  });
+
+  it('视频、音频扩展名和 editor-common 的 mediaKind 一致', () => {
+    for (const ext of ['mp4', 'webm', 'mov', 'm4v', 'ogv', 'mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac']) {
+      expect(MEDIA_EXT.test(`a.${ext.toUpperCase()}`)).toBe(true);
+      expect(mediaKind(`a.${ext}`)).not.toBeNull();
+    }
+    expect(MEDIA_EXT.test('a.png')).toBe(false);
+    expect(MEDIA_EXT.test('a.mp4.md')).toBe(false);
   });
 });

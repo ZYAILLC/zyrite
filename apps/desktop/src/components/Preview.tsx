@@ -1,4 +1,13 @@
-import { highlightCodeBlocks, renderEmbed, renderMath, renderMermaidSvg } from '@zyrite/editor-common';
+import {
+  highlightCodeBlocks,
+  renderCsv,
+  renderEmbed,
+  renderGraphvizSvg,
+  renderMarkmap,
+  renderMath,
+  renderMermaidSvg,
+  replaceMediaImages,
+} from '@zyrite/editor-common';
 import { renderHtml } from '@zyrite/md-blocks';
 import { type MouseEvent as ReactMouseEvent, useEffect, useRef } from 'react';
 import { t } from '../i18n';
@@ -9,10 +18,17 @@ import { activeEditor, onEditorReady } from '../lib/editorRef';
 import { openWikiLink } from '../lib/linkIndex';
 import { activeThemeId, useApp } from '../store';
 
-/** 公式、Mermaid 渲染结果的缓存：每次改动都整篇重新生成 HTML，没变的公式和图直接复用，不闪 */
+/** 公式、Mermaid、Graphviz 渲染结果的缓存：每次改动都整篇重新生成 HTML，没变的公式和图直接复用，不闪 */
 const mathCache = new Map<string, string>();
 const mermaidCache = new Map<string, string>();
+const graphvizCache = new Map<string, string>();
 const CACHE_LIMIT = 500;
+/**
+ * Markmap 是可以交互的图（折叠、展开），缓存画好的元素本身，重新渲染时原样搬到新位置，
+ * 不闪、折叠状态也保留。数量少，上限也小。
+ */
+const markmapCache = new Map<string, HTMLElement>();
+const MARKMAP_LIMIT = 30;
 
 function remember(cache: Map<string, string>, key: string, value: string) {
   if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value as string);
@@ -31,6 +47,8 @@ let mermaidQueue: Promise<void> = Promise.resolve();
 
 function render(el: HTMLElement, markdown: string, filePath: string | null, isCurrent: () => boolean, done: () => void) {
   el.innerHTML = renderHtml(markdown, { lineAttrs: true, footnoteLabel: t.footnotes, footnoteBackLabel: t.footnoteBack });
+  // `![说明](clip.mp4)`：视频、音频显示播放器，网络地址显示成链接
+  replaceMediaImages(el, (src) => backend.resolveImage(src, filePath));
   for (const img of el.querySelectorAll('img')) {
     const src = img.getAttribute('src');
     if (src) img.src = backend.resolveImage(src, filePath);
@@ -66,6 +84,56 @@ function render(el: HTMLElement, markdown: string, filePath: string | null, isCu
     else todo.push([fig, source]);
     replaceKeepLine(code.parentElement ?? code, fig);
   }
+  // CSV / TSV 表格：同步生成，很快，不用缓存
+  for (const code of el.querySelectorAll<HTMLElement>('pre > code.language-csv, pre > code.language-tsv')) {
+    const fig = document.createElement('div');
+    fig.className = 'zy-figure zy-figure-plain zy-csv';
+    renderCsv(fig, code.textContent ?? '', code.classList.contains('language-tsv') ? '\t' : ',');
+    replaceKeepLine(code.parentElement ?? code, fig);
+  }
+  // Markmap：同一份源码复用缓存的元素（同一篇里出现两次时第二个重新画）
+  const usedMaps = new Set<HTMLElement>();
+  for (const code of el.querySelectorAll<HTMLElement>('pre > code.language-markmap')) {
+    const source = code.textContent ?? '';
+    let fig = markmapCache.get(source);
+    const fresh = !fig || usedMaps.has(fig);
+    if (!fig || fresh) {
+      fig = document.createElement('div');
+      fig.className = 'zy-figure zy-markmap';
+    }
+    usedMaps.add(fig);
+    replaceKeepLine(code.parentElement ?? code, fig);
+    if (fresh) {
+      if (markmapCache.size >= MARKMAP_LIMIT) markmapCache.delete(markmapCache.keys().next().value as string);
+      markmapCache.set(source, fig);
+      void renderMarkmap(fig, source);
+    }
+  }
+  // Graphviz：WASM 第一次要加载，之后同步出图；画完的 SVG 按源码缓存
+  const graphs: Promise<void>[] = [];
+  for (const code of el.querySelectorAll<HTMLElement>('pre > code.language-dot, pre > code.language-graphviz')) {
+    const source = code.textContent ?? '';
+    const fig = document.createElement('div');
+    fig.className = 'zy-figure zy-graphviz';
+    const cached = graphvizCache.get(source);
+    if (cached !== undefined) fig.innerHTML = cached;
+    else
+      graphs.push(
+        renderGraphvizSvg(source).then(
+          (svg) => {
+            remember(graphvizCache, source, svg);
+            if (isCurrent()) fig.innerHTML = svg;
+          },
+          (e: unknown) => {
+            fig.textContent = e instanceof Error ? e.message : String(e);
+            fig.classList.add('mermaid-error');
+          },
+        ),
+      );
+    replaceKeepLine(code.parentElement ?? code, fig);
+  }
+  // 图画完后高度变了，再对齐一次滚动位置
+  if (graphs.length) void Promise.all(graphs).then(() => isCurrent() && done());
   if (!todo.length) return done();
   mermaidQueue = mermaidQueue.then(async () => {
     for (const [fig, source] of todo) {
@@ -101,11 +169,13 @@ export function Preview() {
   const themeKey = useApp((s) => `${activeThemeId(s.themePref, s.systemDark)}:${s.typoraTheme ?? ''}`);
   const sync = useScrollSync(scroller, content);
 
-  // 换主题后 Mermaid 的配色跟着变，缓存作废
+  // 换主题后 Mermaid、Graphviz、Markmap 的配色跟着变，缓存作废
   const lastTheme = useRef(themeKey);
   if (lastTheme.current !== themeKey) {
     lastTheme.current = themeKey;
     mermaidCache.clear();
+    graphvizCache.clear();
+    markmapCache.clear();
   }
 
   const generation = useRef(0);

@@ -1,5 +1,6 @@
 import { HighlightStyle } from '@codemirror/language';
 import { highlightCode, type Tag, tagHighlighter, tags as t } from '@lezer/highlight';
+import { RENDERED_LANGS } from './diagrams';
 import { findLanguage } from './render';
 
 /**
@@ -94,14 +95,14 @@ export async function highlightToHtml(code: string, lang: string): Promise<strin
 }
 
 /**
- * 给元素里所有 `<pre><code class="language-xxx">` 上色（公式、Mermaid 除外）。
+ * 给元素里所有 `<pre><code class="language-xxx">` 上色（公式、Mermaid、Graphviz、Markmap、CSV 等渲染成图表的除外）。
  * 有缓存的同步完成；其余异步加载语言后再上色，isCurrent 返回 false 时（内容已经重新渲染）放弃。
  */
 export async function highlightCodeBlocks(root: HTMLElement, isCurrent: () => boolean = () => true): Promise<void> {
   const todo: [HTMLElement, string, string][] = [];
   for (const code of root.querySelectorAll<HTMLElement>('pre > code[class*="language-"]')) {
     const lang = /language-(\S+)/.exec(code.className)?.[1] ?? '';
-    if (!lang || lang === 'math' || lang === 'mermaid') continue;
+    if (!lang || RENDERED_LANGS.has(lang)) continue;
     const text = code.textContent ?? '';
     const hit = cachedHighlight(text, lang);
     if (hit !== undefined) code.innerHTML = hit;

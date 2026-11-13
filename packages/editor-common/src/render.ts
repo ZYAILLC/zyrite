@@ -45,10 +45,11 @@ function ganttWidth(el?: HTMLElement): number {
   return w >= 320 ? Math.min(1200, Math.round(w / 40) * 40) : 720;
 }
 
-/** 读取当前主题的 CSS 变量，给 Mermaid 配色：无填充、细线、文字色描边；饼图扇区用语法色区分 */
-function themeVariables() {
-  const css = getComputedStyle(document.documentElement);
-  const v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
+/**
+ * 把主题的 CSS 变量算成 #rrggbb（Mermaid、Graphviz、Markmap 的配色只认这种写法）。
+ * 返回读取函数；用完调用 done() 清理临时元素。
+ */
+export function themeColorReader(): { color: (name: string, fallback: string) => string; done: () => void } {
   // 变量里可能是 color-mix() 等写法（Typora 主题时），Mermaid 解析不了，先让浏览器算成 rgb()
   const probe = document.createElement('span');
   probe.style.display = 'none';
@@ -71,6 +72,14 @@ function themeVariables() {
     probe.style.color = `var(${name}, ${fallback})`;
     return hex(getComputedStyle(probe).color || fallback, fallback);
   };
+  return { color, done: () => probe.remove() };
+}
+
+/** 读取当前主题的 CSS 变量，给 Mermaid 配色：无填充、细线、文字色描边；饼图扇区用语法色区分 */
+function themeVariables() {
+  const css = getComputedStyle(document.documentElement);
+  const v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
+  const { color, done } = themeColorReader();
   const bg = color('--z-bg', '#ffffff');
   const text = color('--z-text', '#1d1d1f');
   const muted = color('--z-muted', '#6b6a66');
@@ -88,7 +97,7 @@ function themeVariables() {
     ],
     text,
   );
-  probe.remove();
+  done();
   return {
     background: bg,
     primaryColor: bg,

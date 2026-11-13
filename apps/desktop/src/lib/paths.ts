@@ -68,6 +68,9 @@ export function relativePath(fromDir: string, to: string): string {
 
 export const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|avif|ico)$/i;
 
+/** 视频、音频（`![[clip.mp4]]`、`![](song.mp3)` 显示播放器）；和 editor-common 的 VIDEO_EXT、AUDIO_EXT 保持一致 */
+export const MEDIA_EXT = /\.(mp4|webm|mov|m4v|ogv|mp3|wav|ogg|m4a|flac|aac)$/i;
+
 /** Markdown 链接地址：反斜杠换成 `/`，空格和括号等转义，中文保持原样（和 Typora 一致） */
 export function encodeLinkTarget(path: string): string {
   // encodeURIComponent 不转义括号，这里统一手动转成 %XX

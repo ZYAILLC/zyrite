@@ -81,11 +81,12 @@ export interface EditorHandle {
 }
 
 /**
- * `![[目标]]` 嵌入的内容：图片（`![[a.png|200]]` 可带宽度或 `宽x高`），或另一篇笔记（`![[笔记#标题]]` 只嵌入那一节）。
- * 笔记内容异步读取，调用方负责截取标题对应的那一节。
+ * `![[目标]]` 嵌入的内容：图片（`![[a.png|200]]` 可带宽度或 `宽x高`）、视频或音频（`![[clip.mp4]]`，显示播放器），
+ * 或另一篇笔记（`![[笔记#标题]]` 只嵌入那一节）。笔记内容异步读取，调用方负责截取标题对应的那一节。
  */
 export type EmbedInfo =
   | { kind: 'image'; src: string; alt: string; width?: number; height?: number }
+  | { kind: 'media'; media: 'video' | 'audio'; src: string; alt: string; width?: number; height?: number }
   | { kind: 'note'; title: string; load: () => Promise<string>; resolveUrl?: ResolveUrl };
 
 /** 解析 `![[…]]` 里的内容（不含 `![[` `]]`）；解析不了返回 null，照常显示成链接 */
