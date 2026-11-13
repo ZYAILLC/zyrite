@@ -4,13 +4,12 @@ English | [简体中文](README-zh.md)
 
 <p align="center">
   <a href="https://github.com/ZYAILLC/zyrite/actions/workflows/ci.yml"><img src="https://github.com/ZYAILLC/zyrite/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/ZYAILLC/zyrite/releases/latest"><img src="https://img.shields.io/github/v/release/ZYAILLC/zyrite" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey" alt="Platforms: macOS, Windows, Linux">
 </p>
 
 Coding agents like Claude Code, Cursor and Codex now write a lot of Markdown: plans, specs, docs, notes. Zyrite is a desktop editor built for that loop. When an agent changes a file, you see exactly what changed and accept or reject it block by block. When you want something rewritten, you leave a note in the margin and the agent picks it up over MCP. Your files stay plain `.md` on your own disk.
-
-> **Status:** feature-complete and heading into a private beta. There is no stable release yet; see [Download](#download).
 
 ![Zyrite with Markdown source on the left and the rendered preview on the right](docs/images/screenshot-editor.jpg)
 
@@ -88,10 +87,20 @@ The first time a program connects, Zyrite asks you to allow it. Grants are per v
 
 ## Download
 
-There is no stable release yet. To try it now:
+Get the installer for your platform from the [latest release](https://github.com/ZYAILLC/zyrite/releases/latest):
 
-- **Development builds:** every push to `main` is built for all platforms. Open the latest successful [Build workflow run](https://github.com/ZYAILLC/zyrite/actions/workflows/build.yml) and download the installer for your platform from *Artifacts* (requires a GitHub login). The builds are not code-signed yet, so macOS and Windows will warn on first launch.
-- **Build from source:** see below.
+| Platform | Installer |
+| --- | --- |
+| macOS 12+ (Apple Silicon or Intel) | `.dmg` (`aarch64` or `x64`) |
+| Windows 10/11 (x64 or Arm) | `-setup.exe`, or `.msi` for x64 |
+| Linux (x64) | `.AppImage`, `.deb` or `.rpm` |
+
+The installers are not code-signed, so the first launch shows a security prompt:
+
+- **macOS:** if it says Zyrite can't be opened, go to *System Settings › Privacy & Security* and click *Open Anyway*.
+- **Windows:** in the SmartScreen dialog, click *More info › Run anyway*.
+
+You can also [build it from source](#build-from-source).
 
 ## Build from source
 

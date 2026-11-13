@@ -4,13 +4,12 @@
 
 <p align="center">
   <a href="https://github.com/ZYAILLC/zyrite/actions/workflows/ci.yml"><img src="https://github.com/ZYAILLC/zyrite/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/ZYAILLC/zyrite/releases/latest"><img src="https://img.shields.io/github/v/release/ZYAILLC/zyrite" alt="最新版本"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="许可证：Apache-2.0"></a>
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey" alt="平台：macOS、Windows、Linux">
 </p>
 
 Claude Code、Cursor、Codex 这类编程 Agent 现在会写大量 Markdown：方案、规格、文档、笔记。Zyrite 是为这件事做的桌面编辑器：Agent 改了文件，你能看清改了哪些地方，按块接受或拒绝；想让它重写某一段，就在页边写条批注，Agent 通过 MCP 读到后去处理。文件始终是你自己磁盘上的普通 `.md`。
-
-> **状态：** 功能已完成，即将开始 Beta 内测。目前还没有正式版，见[下载](#下载)。
 
 ![Zyrite 左边是 Markdown 原文，右边是渲染后的预览](docs/images/screenshot-editor.jpg)
 
@@ -88,10 +87,20 @@ Claude Code、Cursor、Codex 这类编程 Agent 现在会写大量 Markdown：�
 
 ## 下载
 
-目前还没有正式版。现在想试用可以：
+在[最新 Release](https://github.com/ZYAILLC/zyrite/releases/latest) 里下载对应平台的安装包：
 
-- **开发版：** `main` 分支每次推送都会打三平台安装包。打开最近一次成功的 [Build 运行记录](https://github.com/ZYAILLC/zyrite/actions/workflows/build.yml)，在 *Artifacts* 里下载对应平台的安装包（需要登录 GitHub）。安装包还没有代码签名，macOS 和 Windows 第一次打开时会有安全提示。
-- **从源码构建：** 见下文。
+| 平台 | 安装包 |
+| --- | --- |
+| macOS 12+（Apple 芯片或 Intel） | `.dmg`（`aarch64` 或 `x64`） |
+| Windows 10/11（x64 或 Arm） | `-setup.exe`，x64 也可以用 `.msi` |
+| Linux（x64） | `.AppImage`、`.deb` 或 `.rpm` |
+
+安装包没有代码签名，第一次打开时会有安全提示：
+
+- **macOS：** 如果提示无法打开 Zyrite，到*系统设置 › 隐私与安全性*里点*仍要打开*。
+- **Windows：** 在 SmartScreen 提示里点*更多信息 › 仍要运行*。
+
+也可以[从源码构建](#从源码构建)。
 
 ## 从源码构建
 
