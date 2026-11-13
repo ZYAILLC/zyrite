@@ -1,11 +1,6 @@
 English | [简体中文](README-zh.md)
 
-<p align="center"><img src="apps/desktop/src-tauri/icons/icon.svg" width="112" height="112" alt="Zyrite logo"></p>
-
-<h1 align="center">Zyrite</h1>
-
-<p align="center"><b>The Markdown editor for reviewing what your AI agents write.</b><br>
-Writes like Typora. Organizes like a lightweight Obsidian. Free and open source.</p>
+<p align="center"><img src="docs/images/cover.jpg" alt="Zyrite: the Markdown editor for reviewing what your AI agents write"></p>
 
 <p align="center">
   <a href="https://github.com/ZYAILLC/zyrite/actions/workflows/ci.yml"><img src="https://github.com/ZYAILLC/zyrite/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
@@ -16,6 +11,8 @@ Writes like Typora. Organizes like a lightweight Obsidian. Free and open source.
 Coding agents like Claude Code, Cursor and Codex now write a lot of Markdown: plans, specs, docs, notes. Zyrite is a desktop editor built for that loop. When an agent changes a file, you see exactly what changed and accept or reject it block by block. When you want something rewritten, you leave a note in the margin and the agent picks it up over MCP. Your files stay plain `.md` on your own disk.
 
 > **Status:** feature-complete and heading into a private beta. There is no stable release yet; see [Download](#download).
+
+![Zyrite with Markdown source on the left and the rendered preview on the right](docs/images/screenshot-editor.jpg)
 
 ## Features
 
@@ -34,6 +31,8 @@ Coding agents like Claude Code, Cursor and Codex now write a lot of Markdown: pl
 - CommonMark + GFM (tables, task lists, footnotes), KaTeX math, Mermaid diagrams, syntax highlighting, YAML frontmatter.
 - Obsidian syntax: `[[wikilinks]]`, `![[embeds]]`, `#tags`, `> [!note]` callouts, `==highlights==`.
 - Regex find and replace, multiple cursors, focus mode, typewriter mode.
+
+![Mermaid mind map, display math and a table in the preview](docs/images/screenshot-diagrams.jpg)
 
 ### Organize
 
@@ -71,6 +70,17 @@ The first time a program connects, Zyrite asks you to allow it. Grants are per v
 - Paste or drop images: saved next to your note from a path template, or uploaded through PicGo / PicList or a custom command.
 - Export to PDF, single-file HTML, or Word (`.docx`, no pandoc needed).
 - English by default, with Simplified Chinese in Settings.
+
+<table>
+  <tr>
+    <td><img src="docs/images/theme-graphite.jpg" alt="Graphite"></td>
+    <td><img src="docs/images/theme-signal.jpg" alt="Signal"></td>
+  </tr>
+  <tr>
+    <td align="center">Graphite</td>
+    <td align="center">Signal</td>
+  </tr>
+</table>
 
 ## Download
 

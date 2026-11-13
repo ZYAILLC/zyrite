@@ -1,11 +1,6 @@
 [English](README.md) | 简体中文
 
-<p align="center"><img src="apps/desktop/src-tauri/icons/icon.svg" width="112" height="112" alt="Zyrite logo"></p>
-
-<h1 align="center">Zyrite（纸砚）</h1>
-
-<p align="center"><b>为审阅 AI Agent 写的文档而做的 Markdown 编辑器。</b><br>
-写起来像 Typora，管理起来像轻量版 Obsidian。免费、开源。</p>
+<p align="center"><img src="docs/images/cover.jpg" alt="Zyrite：为审阅 AI Agent 写的文档而做的 Markdown 编辑器"></p>
 
 <p align="center">
   <a href="https://github.com/ZYAILLC/zyrite/actions/workflows/ci.yml"><img src="https://github.com/ZYAILLC/zyrite/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
@@ -16,6 +11,8 @@
 Claude Code、Cursor、Codex 这类编程 Agent 现在会写大量 Markdown：方案、规格、文档、笔记。Zyrite 是为这件事做的桌面编辑器：Agent 改了文件，你能看清改了哪些地方，按块接受或拒绝；想让它重写某一段，就在页边写条批注，Agent 通过 MCP 读到后去处理。文件始终是你自己磁盘上的普通 `.md`。
 
 > **状态：** 功能已完成，即将开始 Beta 内测。目前还没有正式版，见[下载](#下载)。
+
+![Zyrite 左边是 Markdown 原文，右边是渲染后的预览](docs/images/screenshot-editor.jpg)
 
 ## 功能
 
@@ -34,6 +31,8 @@ Claude Code、Cursor、Codex 这类编程 Agent 现在会写大量 Markdown：�
 - CommonMark + GFM（表格、任务列表、脚注）、KaTeX 公式、Mermaid 图、代码高亮、YAML frontmatter。
 - 兼容 Obsidian 语法：`[[双链]]`、`![[嵌入]]`、`#标签`、`> [!note]` callout、`==高亮==`。
 - 正则查找替换、多光标、专注模式、打字机模式。
+
+![预览里的 Mermaid 思维导图、公式块和表格](docs/images/screenshot-diagrams.jpg)
 
 ### 管理
 
@@ -71,6 +70,17 @@ Claude Code、Cursor、Codex 这类编程 Agent 现在会写大量 Markdown：�
 - 粘贴或拖入图片：按路径模板存到笔记旁边，或者通过 PicGo / PicList、自定义命令上传图床。
 - 导出 PDF、单文件 HTML、Word（`.docx`，不需要 pandoc）。
 - 界面默认英文，设置里可以切换为简体中文。
+
+<table>
+  <tr>
+    <td><img src="docs/images/theme-graphite.jpg" alt="石墨"></td>
+    <td><img src="docs/images/theme-signal.jpg" alt="信号"></td>
+  </tr>
+  <tr>
+    <td align="center">石墨</td>
+    <td align="center">信号</td>
+  </tr>
+</table>
 
 ## 下载
 
