@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import type { Annotation, McpAccess, NoteName, Stamp, TreeEntry } from './lib/backend';
 import { type AiSettings, defaultAi, sanitizeAi } from './lib/aiConfig';
 import { type CommandId, defaultKeymap, formatBinding } from './lib/keymap';
+import { isMarkdownDoc } from './lib/paths';
 import { isMac } from './lib/platform';
 import { SETTINGS_VERSION, savedLanguageValue } from './i18n';
 import {
@@ -28,8 +29,9 @@ export type SidebarPage = 'files' | 'doc';
  * - source：纯源码（原文 + 预览分栏时的原文栏，或只开原文且选了纯源码）
  * - live：实时预览（只开原文且选了实时预览）
  * - wysiwyg：所见即所得（只开预览时，预览可直接编辑）
+ * - code：文本文件（YAML、JSON、日志等），只有源码，和原文、预览开关无关
  */
-export type EditorKind = 'source' | 'live' | 'wysiwyg';
+export type EditorKind = 'source' | 'live' | 'wysiwyg' | 'code';
 
 export interface ThemePref {
   /** 跟随系统深浅色 */
@@ -112,6 +114,10 @@ export interface DocState {
   /** 上次打开或保存时文件的戳，保存时用来发现外部修改 */
   stamp: Stamp | null;
   dirty: boolean;
+  /** 只读打开（日志、过大的文件）；不传为 false */
+  readOnly?: boolean;
+  /** 文件的编码，保存时按它写回；不传为 UTF-8 */
+  encoding?: string;
 }
 
 export interface Notice {
@@ -278,7 +284,10 @@ function normalizePanes(showSource: boolean, showPreview: boolean) {
   return showSource || showPreview ? { showSource, showPreview } : { showSource: true, showPreview: false };
 }
 
-export function editorKind(s: Pick<Settings, 'showSource' | 'showPreview' | 'soloSource'>): EditorKind {
+export function editorKind(
+  s: Pick<Settings, 'showSource' | 'showPreview' | 'soloSource'> & Pick<DocState, 'filePath'>,
+): EditorKind {
+  if (!isMarkdownDoc(s.filePath)) return 'code';
   if (!s.showSource) return 'wysiwyg';
   if (s.showPreview) return 'source';
   return s.soloSource === 'plain' ? 'source' : 'live';
@@ -338,7 +347,14 @@ export const useApp = create<AppState>()(
       },
       setSystemDark: (systemDark) => set({ systemDark }),
       setText: (text) => set({ text, dirty: text !== get().savedText }),
-      loadDoc: (doc, opts) => set({ ...doc, docId: get().docId + 1, keepView: !!opts?.keepView }),
+      loadDoc: (doc, opts) =>
+        set({
+          ...doc,
+          readOnly: !!doc.readOnly,
+          encoding: doc.encoding ?? 'UTF-8',
+          docId: get().docId + 1,
+          keepView: !!opts?.keepView,
+        }),
       setFilePath: (filePath) => set({ filePath }),
       setTree: (tree) => set({ tree }),
       setExpanded: (path, open) => set({ expanded: { ...get().expanded, [path]: open } }),

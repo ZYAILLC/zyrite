@@ -1,8 +1,21 @@
 import { t } from '../i18n';
 import { useApp } from '../store';
-import { backend, type Backend, FileError, type Stamp } from './backend';
+import { backend, type Backend, FileError, type LoadedFile, type Stamp, UTF8 } from './backend';
 import { activeEditor } from './editorRef';
-import { basename, dirname, IMAGE_EXT, isUrl, linkForFile, linkPath, MARKDOWN_EXT, resolvePath } from './paths';
+import {
+  basename,
+  dirname,
+  IMAGE_EXT,
+  isDocument,
+  isMarkdownDoc,
+  isSensitive,
+  isUrl,
+  linkForFile,
+  linkPath,
+  LOG_FILE,
+  MARKDOWN_EXT,
+  resolvePath,
+} from './paths';
 
 /**
  * 文档的打开、保存、新建和恢复缓存。
@@ -15,6 +28,9 @@ export const deps: { backend: Backend } = { backend };
 
 /** 恢复缓存的写入间隔 */
 export const RECOVERY_INTERVAL = 2000;
+
+/** 超过这个大小的文本文件只读打开（编辑器能处理，但逐字输入会卡、恢复缓存也太大） */
+export const READ_ONLY_BYTES = 5 * 1024 * 1024;
 
 /** 编辑次数，恢复缓存据此判断要不要写 */
 let edits = 0;
@@ -42,6 +58,8 @@ function errorText(e: unknown, path: string): string {
   const name = basename(path);
   if (err.kind === 'notFound') return t.errNotFound(name);
   if (err.kind === 'notUtf8') return t.errNotUtf8(name);
+  if (err.kind === 'binary') return t.errBinary(name);
+  if (err.kind === 'decode') return t.errDecode(name);
   return t.errIo(name, err.message);
 }
 
@@ -93,20 +111,66 @@ interface OpenOptions {
   quiet?: boolean;
 }
 
+/**
+ * 文本文件打开时的只读判断和提示：日志只读（内容追加时跟到末尾），过大的文件只读，可能含密钥的文件提醒一下。
+ * Markdown 不受影响。
+ */
+function textFileNotice(path: string, len: number): { readOnly: boolean; notice: string | null } {
+  if (isMarkdownDoc(path)) return { readOnly: false, notice: null };
+  if (len > READ_ONLY_BYTES) return { readOnly: true, notice: t.largeReadOnly((len / 1024 / 1024).toFixed(1)) };
+  if (LOG_FILE.test(path)) return { readOnly: true, notice: t.logReadOnly };
+  return { readOnly: false, notice: isSensitive(path) ? t.sensitiveFile : null };
+}
+
 export async function openPath(path: string, opts: OpenOptions = {}): Promise<boolean> {
   if (!opts.force && !(await ensureSaved())) return false;
   try {
-    const f = await deps.backend.openFile(path);
-    useApp.getState().loadDoc({ filePath: f.path, text: f.text, savedText: f.text, stamp: f.stamp, dirty: false });
-    useApp.getState().addRecent(f.path);
+    showLoaded(await deps.backend.openFile(path));
   } catch (e) {
-    if (opts.quiet) notify(errorText(e, path), true);
+    // 二进制文件（在文件树里点了图片、程序等）只在状态栏提示，不弹窗
+    if (opts.quiet || (e instanceof FileError && e.kind === 'binary')) notify(errorText(e, path), true);
     else await deps.backend.showError(errorText(e, path));
     return false;
   }
   edits = persistedEdits = 0;
   await persistSession();
   return true;
+}
+
+/** 把读到的文件放进编辑器：只读判断、编码、提示 */
+function showLoaded(f: LoadedFile) {
+  const { readOnly, notice } = textFileNotice(f.path, f.stamp.len);
+  const encoding = f.encoding ?? UTF8;
+  useApp
+    .getState()
+    .loadDoc({ filePath: f.path, text: f.text, savedText: f.text, stamp: f.stamp, dirty: false, readOnly, encoding });
+  useApp.getState().addRecent(f.path);
+  // 不是 UTF-8 的文件提示一下：保存时按原编码写回
+  const text = notice ?? (encoding !== UTF8 ? t.encodingDetected(encoding) : null);
+  if (text) useApp.getState().setNotice({ text, durationMs: 6000 });
+}
+
+/** 按指定的编码重新打开当前文件（状态栏的编码菜单）；有未保存的修改先问 */
+export async function reopenWithEncoding(encoding: string): Promise<boolean> {
+  const { filePath } = useApp.getState();
+  if (!filePath || !(await ensureSaved())) return false;
+  try {
+    showLoaded(await deps.backend.openFileAs(filePath, encoding));
+  } catch (e) {
+    notify(errorText(e, filePath), true);
+    return false;
+  }
+  edits = persistedEdits = 0;
+  await persistSession();
+  return true;
+}
+
+/** 当前文件改存成 UTF-8：立即保存一次 */
+export async function convertToUtf8(): Promise<boolean> {
+  const { filePath } = useApp.getState();
+  if (!filePath) return false;
+  useApp.setState({ encoding: UTF8 });
+  return save();
 }
 
 export async function openDialog(): Promise<boolean> {
@@ -126,8 +190,9 @@ export async function newDoc(): Promise<boolean> {
 async function writeTo(path: string, expected: Stamp | null): Promise<boolean> {
   const text = currentText();
   saving = path;
+  const encoding = useApp.getState().encoding ?? UTF8;
   try {
-    const stamp = await deps.backend.saveFile(path, text, expected);
+    const stamp = await deps.backend.saveFile(path, text, expected, encoding);
     // 用户自己保存的内容就是新的审阅基线
     await deps.backend.baselineSet(path, text).catch(() => {});
     // 保存是异步的，期间可能又输入了内容
@@ -139,6 +204,13 @@ async function writeTo(path: string, expected: Stamp | null): Promise<boolean> {
     await persistSession();
     return true;
   } catch (e) {
+    // 有字符不能用原编码保存（比如在 GBK 文件里输入了表情）：问要不要改存成 UTF-8，什么都没写入
+    if (e instanceof FileError && e.kind === 'unmappable') {
+      saving = null;
+      if (!(await deps.backend.askUnmappable(basename(path), encoding))) return false;
+      useApp.setState({ encoding: UTF8 });
+      return writeTo(path, expected);
+    }
     if (e instanceof FileError && e.kind === 'conflict') {
       const choice = await deps.backend.askConflict(basename(path));
       if (choice === 'overwrite') return writeTo(path, null);
@@ -217,9 +289,26 @@ export async function onExternalChange(path: string, kind: 'create' | 'modify' |
     return;
   }
   if (currentText() === now.savedText) {
-    now.loadDoc({ filePath: path, text: f.text, savedText: f.text, stamp: f.stamp, dirty: false }, { keepView: true });
-    notify(t.externalReloaded);
+    now.loadDoc(
+      {
+        filePath: path,
+        text: f.text,
+        savedText: f.text,
+        stamp: f.stamp,
+        dirty: false,
+        readOnly: now.readOnly,
+        encoding: f.encoding ?? UTF8,
+      },
+      { keepView: true },
+    );
+    // 日志一直在追加，不每次都提示
+    if (!LOG_FILE.test(path)) notify(t.externalReloaded);
     await persistSession();
+    return;
+  }
+  // 文本文件没有按块审阅：保存时走冲突处理（覆盖或重新载入）
+  if (!isMarkdownDoc(path)) {
+    notify(t.externalChangedText, true);
     return;
   }
   // 有未保存的修改：和 Agent 的版本三方合并（不冲突的自动合并，冲突的进"并排合并"）
@@ -249,10 +338,12 @@ export async function restoreSession(): Promise<void> {
   if (session?.text != null) {
     let savedText = '';
     let stamp = session.stamp;
+    let encoding: string | undefined;
     if (session.path) {
       try {
         const f = await deps.backend.openFile(session.path);
         savedText = f.text;
+        encoding = f.encoding;
         // 保留会话里的戳：还原后保存时，能发现这期间文件被外部改过
         stamp ??= f.stamp;
       } catch {
@@ -260,7 +351,7 @@ export async function restoreSession(): Promise<void> {
       }
     }
     const dirty = session.text !== savedText;
-    useApp.getState().loadDoc({ filePath: session.path, text: session.text, savedText, stamp, dirty });
+    useApp.getState().loadDoc({ filePath: session.path, text: session.text, savedText, stamp, dirty, encoding });
     if (dirty) {
       edits = 1;
       persistedEdits = 1;
@@ -320,5 +411,5 @@ export async function openLink(href: string, kind: 'url' | 'wikilink'): Promise<
   if (!rel) return; // 只有锚点：文内跳转以后再做
   if (kind === 'wikilink' && !MARKDOWN_EXT.test(rel)) rel += '.md';
   const target = resolvePath(dirname(filePath), rel);
-  if (MARKDOWN_EXT.test(target)) await openPath(target, { quiet: true });
+  if (isDocument(target)) await openPath(target, { quiet: true });
 }

@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { mediaKind } from '@zyrite/editor-common';
-import { basename, dirname, isUrl, linkForFile, linkPath, MEDIA_EXT, relativePath, resolvePath } from './paths';
+import {
+  basename,
+  dirname,
+  isDocument,
+  isMarkdownDoc,
+  isSensitive,
+  isTextFile,
+  isUrl,
+  linkForFile,
+  linkPath,
+  MEDIA_EXT,
+  relativePath,
+  resolvePath,
+} from './paths';
 
 describe('paths', () => {
   it('basename / dirname', () => {
@@ -61,5 +74,28 @@ describe('拖入文件生成链接', () => {
     }
     expect(MEDIA_EXT.test('a.png')).toBe(false);
     expect(MEDIA_EXT.test('a.mp4.md')).toBe(false);
+  });
+});
+
+describe('文件类型', () => {
+  it('文本文件：按扩展名或文件名认，Markdown 和 .txt 不算', () => {
+    for (const p of ['/a/config.yaml', '/a/b.JSON', 'Cargo.toml', '/a/app.log', '/a/Dockerfile', 'Makefile', '/a/x.tsx']) {
+      expect(isTextFile(p)).toBe(true);
+    }
+    for (const p of ['/a/note.md', '/a/a.txt', '/a/logo.png', '/a/tool.exe', '/a/clip.mp4']) expect(isTextFile(p)).toBe(false);
+    expect(isDocument('/a/note.md') && isDocument('/a/a.yml') && !isDocument('/a/logo.png')).toBe(true);
+  });
+
+  it('Markdown 文档：新建的、.md、.txt；其他扩展名都按纯文本编辑', () => {
+    expect(isMarkdownDoc(null)).toBe(true);
+    expect(isMarkdownDoc('/a/note.MD')).toBe(true);
+    expect(isMarkdownDoc('/a/a.txt')).toBe(true);
+    expect(isMarkdownDoc('/a/config.yaml')).toBe(false);
+    expect(isMarkdownDoc('/a/unknown.xyz')).toBe(false);
+  });
+
+  it('可能含密钥的文件', () => {
+    for (const p of ['/a/.env', '/a/.env.local', '/a/server.pem', '/a/id_rsa', '/a/credentials.json']) expect(isSensitive(p)).toBe(true);
+    for (const p of ['/a/.env.example', '/a/config.yaml', '/a/keys.md']) expect(isSensitive(p)).toBe(false);
   });
 });

@@ -7,13 +7,15 @@ interface Props {
   y: number;
   items: MenuItem[];
   onClose: () => void;
+  /** 在 y 的上方弹出（状态栏里的按钮） */
+  above?: boolean;
 }
 
 /**
  * 右键菜单。弹出层样式：细边框 + 轻阴影，6px 圆角；选中项整行浅灰底。
  * 点外面、Esc、窗口失焦都会关闭；↑↓ 选择，↵ 执行。
  */
-export function ContextMenu({ x, y, items, onClose }: Props) {
+export function ContextMenu({ x, y, items, onClose, above }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y });
   const actions = items.filter((i) => i !== 'separator');
@@ -24,12 +26,13 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
     const el = ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
+    const top = above ? y - r.height - 4 : y;
     setPos({
       x: Math.max(4, Math.min(x, window.innerWidth - r.width - 4)),
-      y: Math.max(4, Math.min(y, window.innerHeight - r.height - 4)),
+      y: Math.max(4, Math.min(top, window.innerHeight - r.height - 4)),
     });
     el.focus();
-  }, [x, y]);
+  }, [x, y, above]);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {

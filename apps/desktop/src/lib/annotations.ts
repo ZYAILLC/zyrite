@@ -3,6 +3,7 @@ import { useApp } from '../store';
 import type { Annotation, AnnotationStatus } from './backend';
 import { deps } from './document';
 import { activeEditor } from './editorRef';
+import { isMarkdownDoc } from './paths';
 import { relInVault } from './vault';
 
 /**
@@ -21,7 +22,8 @@ let loadSeq = 0;
 export async function loadAnnotations(): Promise<void> {
   const seq = ++loadSeq;
   const { filePath, folder } = useApp.getState();
-  if (!filePath || !folder || relInVault(filePath) === null) {
+  // 批注只用于 Markdown
+  if (!filePath || !folder || relInVault(filePath) === null || !isMarkdownDoc(filePath)) {
     useApp.setState({ annotations: [] });
     return;
   }

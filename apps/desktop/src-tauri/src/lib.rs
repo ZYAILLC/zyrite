@@ -81,14 +81,25 @@ fn open_file(app: AppHandle, path: PathBuf) -> Result<LoadedFile, FileError> {
     Ok(loaded)
 }
 
+/// 按指定的编码重新打开（状态栏的编码菜单）
+#[tauri::command(async)]
+fn open_file_as(app: AppHandle, path: PathBuf, encoding: String) -> Result<LoadedFile, FileError> {
+    let loaded = files::read_text_as(&path, &encoding)?;
+    allow_doc_dir(&app, &path);
+    Ok(loaded)
+}
+
+/// 保存；encoding 是打开时识别出的编码（不传为 UTF-8）
 #[tauri::command(async)]
 fn save_file(
     app: AppHandle,
     path: PathBuf,
     text: String,
     expected: Option<Stamp>,
+    encoding: Option<String>,
 ) -> Result<Stamp, FileError> {
-    let stamp = files::save_text(&path, &text, expected)?;
+    let encoding = encoding.unwrap_or_else(|| files::UTF8.to_string());
+    let stamp = files::save_text_as(&path, &text, expected, &encoding)?;
     allow_doc_dir(&app, &path);
     Ok(stamp)
 }
@@ -106,10 +117,10 @@ fn session_save(store: State<'_, RecoveryStore>, mut session: Session) -> Result
     Ok(store.save(&session)?)
 }
 
-/// 文件夹里的 Markdown 文件（相对路径），⌘P 快速打开用
+/// 文件夹里能打开编辑的文件（Markdown 和文本文件，相对路径），⌘P 快速打开用
 #[tauri::command]
-async fn list_markdown(root: PathBuf) -> Result<Vec<String>, FileError> {
-    blocking(move || Ok(vault::list_markdown(&root, vault::DEFAULT_LIMIT)?)).await
+async fn list_documents(root: PathBuf) -> Result<Vec<String>, FileError> {
+    blocking(move || Ok(vault::list_documents(&root, vault::DEFAULT_LIMIT)?)).await
 }
 
 /// 文件树（相对路径）
@@ -538,10 +549,11 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             open_file,
+            open_file_as,
             save_file,
             session_load,
             session_save,
-            list_markdown,
+            list_documents,
             list_tree,
             is_dir,
             create_file,

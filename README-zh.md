@@ -34,6 +34,7 @@ Claude Code、Cursor、Codex 这类编程 Agent 现在会写大量 Markdown：�
 - 兼容 Obsidian 语法：`[[双链]]`、`![[图片.png|200]]` 和 `![[笔记#某一节]]` 嵌入、`#标签`、`> [!note]` callout、`==高亮==`。
 - Emoji 短码（`:rocket:`）、上标（`x^2^`）、可选的下标（`H~2~O`）、`[TOC]` 目录、本地音视频。
 - 正则查找替换、多光标、专注模式、打字机模式，选中文字后可以直接改颜色。
+- **也能编辑其他文本文件：** YAML、JSON、TOML、`.conf` / `.ini`、XML、CSV、Dockerfile、Shell 脚本、代码和日志，用纯文本编辑器打开，带行号、折叠和语法高亮。JSON、YAML、TOML 边写边校验格式。日志只读打开，有新内容时自动跟到末尾。GBK、Big5、Shift-JIS 等旧编码的文件能自动识别，保存时按原编码写回。不会运行任何文件。
 
 ![预览里的 Mermaid 思维导图、公式块和表格](docs/images/screenshot-diagrams.jpg)
 

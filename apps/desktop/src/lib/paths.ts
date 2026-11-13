@@ -53,6 +53,44 @@ export function linkPath(href: string): string {
 
 export const MARKDOWN_EXT = /\.(md|markdown|mdown|mkd|mdx|txt)$/i;
 
+/**
+ * 可以当纯文本编辑的文件（配置、数据、日志、代码等）：用文本文件编辑器打开，没有预览。
+ * 和 crates/zyrite-core/src/vault.rs 的 TEXT_EXT、TEXT_NAMES 保持一致（.txt 按 Markdown 打开）。
+ */
+export const TEXT_EXT =
+  /\.(log|out|json|jsonc|json5|jsonl|ndjson|geojson|ya?ml|toml|ini|cfg|conf|config|properties|env|xml|plist|xsd|xsl|csv|tsv|html?|css|scss|sass|less|[mc]?js|jsx|[mc]?ts|tsx|vue|svelte|pyi?|rb|go|rs|java|kts?|scala|groovy|gradle|swift|mm?|c|h|cc|cpp|cxx|hpp|hh|cs|fs|php|lua|pl|pm|r|jl|dart|exs?|erl|hs|clj|sql|sh|bash|zsh|fish|ps1|psm1|bat|cmd|mk|cmake|tf|hcl|nix|proto|graphql|gql|prisma|diff|patch|tex|bib|rst|adoc|org|srt|vtt|lock|sum|mod|rules|service|desktop|reg|nginx)$/i;
+export const TEXT_NAMES =
+  /^(dockerfile|containerfile|makefile|gnumakefile|justfile|procfile|gemfile|rakefile|podfile|brewfile|vagrantfile|jenkinsfile|caddyfile|license|licence|copying|notice|authors|changelog|readme|todo|codeowners|cname|hosts)$/i;
+
+/** 文本文件（不含 Markdown） */
+export function isTextFile(path: string): boolean {
+  const name = basename(path);
+  return !MARKDOWN_EXT.test(name) && (TEXT_EXT.test(name) || TEXT_NAMES.test(name));
+}
+
+/** 能在 Zyrite 里打开编辑的文件：Markdown 或文本文件 */
+export function isDocument(path: string): boolean {
+  return MARKDOWN_EXT.test(path) || isTextFile(path);
+}
+
+/** 当前文档是不是 Markdown：新建、还没保存的文档算 Markdown；其他扩展名（包括不认识的、没有扩展名的）都按纯文本编辑 */
+export function isMarkdownDoc(path: string | null): boolean {
+  return !path || MARKDOWN_EXT.test(path);
+}
+
+/** 日志：只读打开，内容追加时跟到末尾 */
+export const LOG_FILE = /\.(log|out)$/i;
+
+/** 可能含有密钥的文件：打开时提醒，它们不会进索引，也不会交给 Agent */
+export function isSensitive(path: string): boolean {
+  const name = basename(path).toLowerCase();
+  return (
+    (/^\.env(\..+)?$/.test(name) && !/\.(example|sample|template)$/.test(name)) ||
+    /\.(pem|key|p12|pfx|keystore|jks)$/.test(name) ||
+    /^(id_rsa|id_ed25519|id_ecdsa|credentials|secrets?)(\..+)?$/.test(name)
+  );
+}
+
 /** 从目录 fromDir 到 to 的相对路径（分隔符用 `/`）；不在同一个盘符时返回 to 本身 */
 export function relativePath(fromDir: string, to: string): string {
   const split = (p: string) => p.split(/[\\/]/).filter(Boolean);

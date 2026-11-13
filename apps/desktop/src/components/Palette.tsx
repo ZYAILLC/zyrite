@@ -88,7 +88,7 @@ function PaletteDialog({ mode, tag }: { mode: PaletteMode; tag?: string }) {
       return;
     }
     let alive = true;
-    (mode === 'tag' && tag ? deps.backend.notesWithTag(tag) : deps.backend.listMarkdown(root ?? ''))
+    (mode === 'tag' && tag ? deps.backend.notesWithTag(tag) : deps.backend.listDocuments(root ?? ''))
       .then((f) => alive && setFiles(f))
       .catch(() => alive && setFiles([]));
     return () => {

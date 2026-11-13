@@ -4,7 +4,7 @@ import { ask, message, open, save } from '@tauri-apps/plugin-dialog';
 import { openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 import { type Locale, t } from '../i18n';
 import { useApp } from '../store';
-import { dirname, isUrl, resolvePath } from './paths';
+import { dirname, IMAGE_EXT, isDocument, isMarkdownDoc, isUrl, MEDIA_EXT, resolvePath } from './paths';
 import { isTauri } from './platform';
 import { allowImage, type ImagePrefs } from './prefs';
 
@@ -23,7 +23,12 @@ export interface LoadedFile {
   path: string;
   text: string;
   stamp: Stamp;
+  /** 文件的编码，例如 "UTF-8"、"GBK"；旧版后端没有这一项，按 UTF-8 */
+  encoding?: string;
 }
+
+/** 默认编码 */
+export const UTF8 = 'UTF-8';
 
 export interface Session {
   path: string | null;
@@ -34,7 +39,7 @@ export interface Session {
   folder?: string | null;
 }
 
-export type FileErrorKind = 'notFound' | 'notUtf8' | 'conflict' | 'exists' | 'io';
+export type FileErrorKind = 'notFound' | 'notUtf8' | 'binary' | 'decode' | 'unmappable' | 'conflict' | 'exists' | 'io';
 
 /** 文件树条目：相对库根目录的路径，分隔符为 `/` */
 export interface TreeEntry {
@@ -226,11 +231,15 @@ export interface Backend {
   pickOpen(): Promise<string | null>;
   pickSave(defaultPath: string): Promise<string | null>;
   pickFolder(): Promise<string | null>;
-  /** 文件夹里的 Markdown 文件，相对路径、分隔符为 `/` */
-  listMarkdown(root: string): Promise<string[]>;
+  /** 文件夹里能打开编辑的文件（Markdown 和文本文件），相对路径、分隔符为 `/` */
+  listDocuments(root: string): Promise<string[]>;
   openFile(path: string): Promise<LoadedFile>;
-  /** expected 为 null 时无条件覆盖 */
-  saveFile(path: string, text: string, expected: Stamp | null): Promise<Stamp>;
+  /** 按指定的编码重新打开（编码名用 WHATWG 标签，例如 "gbk"、"big5"） */
+  openFileAs(path: string, encoding: string): Promise<LoadedFile>;
+  /** expected 为 null 时无条件覆盖；encoding 是打开时的编码，不传为 UTF-8 */
+  saveFile(path: string, text: string, expected: Stamp | null, encoding?: string): Promise<Stamp>;
+  /** 有字符不能用原编码保存：改存成 UTF-8，或者取消 */
+  askUnmappable(name: string, encoding: string): Promise<boolean>;
   loadSession(): Promise<Session | null>;
   saveSession(session: Omit<Session, 'updatedMs'>): Promise<void>;
   launchPath(): Promise<string | null>;
@@ -346,7 +355,16 @@ export interface ThemeFile {
   path: string;
 }
 
-const MD_FILTER = [{ name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkd', 'mdx', 'txt'] }];
+const MD_EXTS = ['md', 'markdown', 'mdown', 'mkd', 'mdx', 'txt'];
+/** 打开对话框：Markdown 在前（默认），也可以选常见的文本文件或任意文件 */
+const openFilters = () => [
+  { name: t.filterMarkdown, extensions: MD_EXTS },
+  {
+    name: t.filterText,
+    extensions: ['json', 'jsonc', 'jsonl', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'properties', 'env', 'xml', 'csv', 'tsv', 'log', 'sh', 'sql', 'html', 'css', 'js', 'ts', 'py', 'go', 'rs'],
+  },
+  { name: t.filterAll, extensions: ['*'] },
+];
 
 function toFileError(e: unknown): FileError {
   if (e instanceof FileError) return e;
@@ -375,17 +393,22 @@ function remoteImage(src: string): string {
 
 const tauriBackend: Backend = {
   async pickOpen() {
-    const p = await open({ multiple: false, directory: false, filters: MD_FILTER });
+    const p = await open({ multiple: false, directory: false, filters: openFilters() });
     return typeof p === 'string' ? p : null;
   },
-  pickSave: (defaultPath) => save({ defaultPath, filters: MD_FILTER }),
+  // 文本文件另存为时不限定扩展名，不然会被加上 .md
+  pickSave: (defaultPath) =>
+    save({ defaultPath, filters: isMarkdownDoc(defaultPath) ? [{ name: t.filterMarkdown, extensions: MD_EXTS }] : [] }),
   async pickFolder() {
     const p = await open({ multiple: false, directory: true });
     return typeof p === 'string' ? p : null;
   },
-  listMarkdown: (root) => call('list_markdown', { root }),
+  listDocuments: (root) => call('list_documents', { root }),
   openFile: (path) => call('open_file', { path }),
-  saveFile: (path, text, expected) => call('save_file', { path, text, expected }),
+  openFileAs: (path, encoding) => call('open_file_as', { path, encoding }),
+  saveFile: (path, text, expected, encoding) => call('save_file', { path, text, expected, encoding: encoding ?? null }),
+  askUnmappable: (name, encoding) =>
+    ask(t.unmappableMessage(name, encoding), { title: 'Zyrite', kind: 'warning', okLabel: t.saveAsUtf8, cancelLabel: t.cancel }),
   loadSession: () => call('session_load'),
   async saveSession(session) {
     await call('session_save', { session: { ...session, updatedMs: 0 } });
@@ -530,17 +553,26 @@ export const webBackend: Backend = {
   async pickFolder() {
     return window.prompt(t.openFolder, '/') || null;
   },
-  async listMarkdown(root) {
+  async listDocuments(root) {
     const prefix = root.endsWith('/') ? root : `${root}/`;
     return Object.keys(readJson<WebFs>(WEB_FS, {}))
-      .filter((p) => p.startsWith(prefix))
+      .filter((p) => p.startsWith(prefix) && isDocument(p))
       .map((p) => p.slice(prefix.length))
       .sort();
   },
   async openFile(path) {
     const f = readJson<WebFs>(WEB_FS, {})[path];
     if (!f) throw new FileError('notFound', path);
-    return { path, ...f };
+    // 图片、音视频存在 webimages 里，这里只是占位，和桌面版一样当二进制文件
+    if (IMAGE_EXT.test(path) || MEDIA_EXT.test(path)) throw new FileError('binary', path);
+    return { path, ...f, encoding: UTF8 };
+  },
+  // 浏览器里的文件都是字符串，没有编码可选
+  async openFileAs(path) {
+    return this.openFile(path);
+  },
+  async askUnmappable(name, encoding) {
+    return window.confirm(t.unmappableMessage(name, encoding));
   },
   async saveFile(path, text, expected) {
     const fs = readJson<WebFs>(WEB_FS, {});

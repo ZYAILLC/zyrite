@@ -43,6 +43,36 @@ pub fn is_media(name: &str) -> bool {
     has_ext(name, MEDIA_EXT)
 }
 
+/// 可以当纯文本编辑的文件（配置、数据、日志、代码等）：用源码编辑器打开，没有预览。
+/// 和前端 apps/desktop/src/lib/paths.ts 的 TEXT_EXT、TEXT_NAMES 保持一致。
+const TEXT_EXT: &[&str] = &[
+    "txt", "log", "out", "json", "jsonc", "json5", "jsonl", "ndjson", "geojson", "yaml", "yml",
+    "toml", "ini", "cfg", "conf", "config", "properties", "env", "xml", "plist", "xsd", "xsl",
+    "csv", "tsv", "html", "htm", "css", "scss", "sass", "less", "js", "mjs", "cjs", "jsx", "ts",
+    "mts", "cts", "tsx", "vue", "svelte", "py", "pyi", "rb", "go", "rs", "java", "kt", "kts",
+    "scala", "groovy", "gradle", "swift", "m", "mm", "c", "h", "cc", "cpp", "cxx", "hpp", "hh",
+    "cs", "fs", "php", "lua", "pl", "pm", "r", "jl", "dart", "ex", "exs", "erl", "hs", "clj",
+    "sql", "sh", "bash", "zsh", "fish", "ps1", "psm1", "bat", "cmd", "mk", "cmake", "tf", "hcl",
+    "nix", "proto", "graphql", "gql", "prisma", "diff", "patch", "tex", "bib", "rst", "adoc",
+    "org", "srt", "vtt", "lock", "sum", "mod", "rules", "service", "desktop", "reg", "nginx",
+];
+/// 没有扩展名、按文件名认的文本文件（大小写不敏感）
+const TEXT_NAMES: &[&str] = &[
+    "dockerfile", "containerfile", "makefile", "gnumakefile", "justfile", "procfile",
+    "gemfile", "rakefile", "podfile", "brewfile", "vagrantfile", "jenkinsfile", "caddyfile",
+    "license", "licence", "copying", "notice", "authors", "changelog", "readme", "todo",
+    "codeowners", "cname", "hosts",
+];
+
+pub fn is_text(name: &str) -> bool {
+    has_ext(name, TEXT_EXT) || TEXT_NAMES.iter().any(|n| n.eq_ignore_ascii_case(name))
+}
+
+/// 能在 Zyrite 里打开编辑的文件：Markdown 和文本文件
+pub fn is_document(name: &str) -> bool {
+    is_markdown(name) || is_text(name)
+}
+
 fn walker(root: &Path) -> WalkBuilder {
     let mut b = WalkBuilder::new(root);
     b.hidden(true)
@@ -67,15 +97,24 @@ fn rel(root: &Path, path: &Path) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join("/"))
 }
 
-/// 文件夹里的 Markdown 文件（相对路径），⌘P 快速打开用
+/// 文件夹里的 Markdown 文件（相对路径）：索引、MCP 用。只有笔记，配置和日志不交给 Agent
 pub fn list_markdown(root: &Path, limit: usize) -> io::Result<Vec<String>> {
+    list_files(root, limit, is_markdown)
+}
+
+/// 文件夹里能打开编辑的文件（Markdown 和文本文件，相对路径）：⌘P 快速打开用
+pub fn list_documents(root: &Path, limit: usize) -> io::Result<Vec<String>> {
+    list_files(root, limit, is_document)
+}
+
+fn list_files(root: &Path, limit: usize, keep: fn(&str) -> bool) -> io::Result<Vec<String>> {
     fs::read_dir(root)?; // 根目录读不了要报错
     let mut out = Vec::new();
     for entry in walker(root).build().flatten() {
         let is_file = entry
             .file_type()
             .is_some_and(|t| t.is_file() || t.is_symlink());
-        if is_file && is_markdown(&entry.file_name().to_string_lossy()) {
+        if is_file && keep(&entry.file_name().to_string_lossy()) {
             if let Some(r) = rel(root, entry.path()) {
                 out.push(r);
             }
@@ -96,7 +135,7 @@ pub struct TreeEntry {
     pub dir: bool,
 }
 
-/// 文件树：所有目录，加上 Markdown、图片和视频音频（`all_files` 时列出全部文件）
+/// 文件树：所有目录，加上 Markdown、文本文件、图片和视频音频（`all_files` 时列出全部文件）
 pub fn list_tree(root: &Path, all_files: bool, limit: usize) -> io::Result<Vec<TreeEntry>> {
     fs::read_dir(root)?;
     let mut out = Vec::new();
@@ -110,7 +149,7 @@ pub fn list_tree(root: &Path, all_files: bool, limit: usize) -> io::Result<Vec<T
         let name = entry.file_name().to_string_lossy();
         if kind.is_dir() {
             out.push(TreeEntry { path, dir: true });
-        } else if all_files || is_markdown(&name) || is_image(&name) || is_media(&name) {
+        } else if all_files || is_document(&name) || is_image(&name) || is_media(&name) {
             out.push(TreeEntry { path, dir: false });
         }
         if out.len() >= limit {
@@ -260,6 +299,9 @@ mod tests {
             "media/song.mp3",
             "media/notes.srt",
             "notes.txt",
+            "config/app.yaml",
+            "config/Dockerfile",
+            "bin/tool.exe",
             ".git/x.md",
             ".obsidian/y.md",
             "node_modules/pkg/README.md",
@@ -283,7 +325,26 @@ mod tests {
     }
 
     #[test]
-    fn 文件树_含目录_图片和视频音频() {
+    fn 列出可编辑的文件_含文本文件() {
+        let dir = sample();
+        let got = list_documents(dir.path(), DEFAULT_LIMIT).unwrap();
+        assert_eq!(
+            got,
+            vec![
+                "a.md",
+                "config/Dockerfile",
+                "config/app.yaml",
+                "docs/b.markdown",
+                "docs/deep/c.MD",
+                "media/notes.srt",
+                "notes.txt"
+            ]
+        );
+        assert!(is_text("server.LOG") && is_text("makefile") && !is_text("tool.exe"));
+    }
+
+    #[test]
+    fn 文件树_含目录_文本_图片和视频音频() {
         let dir = sample();
         let got: Vec<_> = list_tree(dir.path(), false, DEFAULT_LIMIT)
             .unwrap()
@@ -294,6 +355,10 @@ mod tests {
             got,
             vec![
                 "a.md",
+                "bin/",
+                "config/",
+                "config/Dockerfile",
+                "config/app.yaml",
                 "docs/",
                 "docs/b.markdown",
                 "docs/deep/",
@@ -303,11 +368,13 @@ mod tests {
                 "empty/",
                 "media/",
                 "media/clip.MP4",
-                "media/song.mp3"
+                "media/notes.srt",
+                "media/song.mp3",
+                "notes.txt"
             ]
         );
         let all = list_tree(dir.path(), true, DEFAULT_LIMIT).unwrap();
-        assert!(all.iter().any(|e| e.path == "notes.txt"));
+        assert!(all.iter().any(|e| e.path == "bin/tool.exe"));
     }
 
     #[test]

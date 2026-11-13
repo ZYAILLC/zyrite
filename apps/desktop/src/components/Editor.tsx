@@ -1,5 +1,5 @@
 import type { EditorOptions } from '@zyrite/editor-common';
-import { createLiveEditor } from '@zyrite/editor-live';
+import { createCodeEditor, createLiveEditor } from '@zyrite/editor-live';
 import { createWysiwygEditor } from '@zyrite/editor-wysiwyg';
 import { type MouseEvent as ReactMouseEvent, useEffect, useRef } from 'react';
 import { t } from '../i18n';
@@ -9,6 +9,7 @@ import { resolveEmbed } from '../lib/embeds';
 import { completeLinks, linkStatus, openWikiLink } from '../lib/linkIndex';
 import { activeEditor, setActiveEditor } from '../lib/editorRef';
 import { pasteFromSystem, pasteImages } from '../lib/images';
+import { basename, LOG_FILE } from '../lib/paths';
 import { editorKind, useApp } from '../store';
 
 /** 编辑后多久把内容同步到 store（字数、大纲、是否有未保存修改） */
@@ -20,6 +21,8 @@ interface Carry {
   /** 切换前光标所在的顶层块；切换前编辑器没有焦点时不恢复光标 */
   block?: number;
   scrollTop: number;
+  /** 关掉前滚到了最底下（日志重新载入后继续跟到末尾） */
+  atEnd?: boolean;
 }
 
 /**
@@ -30,6 +33,8 @@ interface Carry {
  *   光标放回同一块，滚动位置尽量保持。所见即所得做块级回写，切换本身不会改动原文。
  * - 换文档（打开、新建、还原，docId 变化）：用 store 里的新内容重建，光标和滚动回到开头。
  * - 改了影响解析的设置（下标写法）：和换种类一样，用当前全文重建。
+ * - 文本文件（YAML、JSON、日志等）用文本文件编辑器，和原文、预览开关无关。日志打开时、
+ *   以及重新载入前滚到了底部时，滚到末尾（跟随新内容）。
  */
 export function Editor() {
   const host = useRef<HTMLDivElement>(null);
@@ -53,6 +58,7 @@ export function Editor() {
         text: useApp.getState().text,
         block: keep ? carry.current.block : undefined,
         scrollTop: keep ? carry.current.scrollTop : 0,
+        atEnd: keep ? carry.current.atEnd : undefined,
       };
     }
 
@@ -74,13 +80,22 @@ export function Editor() {
         timer = setTimeout(() => useApp.getState().setText(handle.getText()), SYNC_DELAY);
       },
     };
-    const handle = kind === 'wysiwyg' ? createWysiwygEditor(opts) : createLiveEditor({ ...opts, rendered: kind === 'live' });
+    const { filePath, readOnly } = useApp.getState();
+    const handle =
+      kind === 'code'
+        ? createCodeEditor({ ...opts, fileName: basename(filePath ?? ''), readOnly })
+        : kind === 'wysiwyg'
+          ? createWysiwygEditor(opts)
+          : createLiveEditor({ ...opts, rendered: kind === 'live' });
     const { focusMode, typewriter } = useApp.getState();
     handle.setFocusMode(focusMode);
     handle.setTypewriter(typewriter);
 
+    const follow = kind === 'code' && !!filePath && LOG_FILE.test(filePath) && carry.current.atEnd !== false;
     if (scroller) scroller.scrollTop = carry.current.scrollTop;
-    if (carry.current.block !== undefined) handle.setCursorBlock(carry.current.block);
+    if (carry.current.block !== undefined && !follow) handle.setCursorBlock(carry.current.block);
+    // 日志：等编辑器排好版再滚到底
+    if (follow && scroller) requestAnimationFrame(() => (scroller.scrollTop = scroller.scrollHeight));
     setActiveEditor(handle, docId);
 
     return () => {
@@ -88,13 +103,14 @@ export function Editor() {
       const hadFocus = parent.contains(document.activeElement);
       const block = hadFocus ? handle.getCursorBlock() : undefined;
       const scrollTop = scroller?.scrollTop ?? 0;
+      const atEnd = scroller ? scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 40 : false;
       // 换文档时 store 里已经是新文档，旧编辑器的内容不能再写回去
       if (useApp.getState().docId === docId) {
         const text = handle.getText();
-        carry.current = { docId, text, block, scrollTop };
+        carry.current = { docId, text, block, scrollTop, atEnd };
         useApp.getState().setText(text);
       } else {
-        carry.current = { ...carry.current, block, scrollTop };
+        carry.current = { ...carry.current, block, scrollTop, atEnd };
       }
       handle.destroy();
       if (activeEditor.current === handle) activeEditor.current = null;

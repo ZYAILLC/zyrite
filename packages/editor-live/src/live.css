@@ -25,6 +25,15 @@
   white-space: pre-wrap;
 }
 
+/* 文本文件（配置、日志、代码）：铺满宽度，左边是行号，字号略小 */
+.cm-content.zy-source.zy-textfile {
+  max-width: none;
+  margin: 0;
+  padding: 20px 28px 56px 4px;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
 /* 标题：始终按标题字号显示，光标不在时隐藏 # */
 #write.zy-live .zy-h {
   font-weight: 600;

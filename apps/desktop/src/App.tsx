@@ -19,7 +19,7 @@ import { useTheme } from './components/useTheme';
 import { locale, t } from './i18n';
 import { dropFiles, newDoc, openDialog, openFolder, openPath, prepareClose, restoreSession, startRecovery } from './lib/document';
 import { backend } from './lib/backend';
-import { basename, dirname } from './lib/paths';
+import { basename, dirname, isMarkdownDoc } from './lib/paths';
 import { loadAnnotations } from './lib/annotations';
 import { loadNoteNames, openIndex } from './lib/linkIndex';
 import { refreshReview } from './lib/review';
@@ -50,8 +50,8 @@ export function App() {
   const showSource = useApp((s) => s.showSource);
   const showPreview = useApp((s) => s.showPreview);
   const sidebarPage = useApp((s) => s.sidebarPage);
-  // 审阅、合并时只显示原文这一栏（里面换成审阅 / 合并视图）
-  const split = showSource && showPreview && !review && !merge;
+  // 审阅、合并时只显示原文这一栏（里面换成审阅 / 合并视图）；文本文件没有预览
+  const split = showSource && showPreview && !review && !merge && isMarkdownDoc(filePath);
   const full = edition === 'full';
   const fileName = filePath ? basename(filePath) : t.untitled;
   const dir = filePath ? basename(dirname(filePath)) || undefined : undefined;

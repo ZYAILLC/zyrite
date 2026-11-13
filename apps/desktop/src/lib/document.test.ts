@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useApp } from '../store';
+import { t } from '../i18n';
+import { editorKind, useApp } from '../store';
 import { activeEditor } from './editorRef';
 import { fakeBackend, resetStore } from './fakeBackend.testutil';
 import {
@@ -9,8 +10,12 @@ import {
   newDoc,
   openFolder,
   openLink,
+  convertToUtf8,
+  onExternalChange,
   openPath,
+  reopenWithEncoding,
   prepareClose,
+  READ_ONLY_BYTES,
   quickOpenRoot,
   restoreSession,
   save,
@@ -271,5 +276,103 @@ describe('拖入文件', () => {
     fake.write('/vault/a.md', 'A');
     await dropFiles(['/vault']);
     expect(useApp.getState().folder).toBe('/vault');
+  });
+});
+
+describe('文本文件（YAML、日志等）', () => {
+  it('YAML：用文本文件编辑器，可以编辑保存，没有提示', async () => {
+    fake.write('/d/config.yaml', 'a: 1\n');
+    expect(await openPath('/d/config.yaml')).toBe(true);
+    expect(useApp.getState()).toMatchObject({ filePath: '/d/config.yaml', readOnly: false });
+    expect(editorKind(useApp.getState())).toBe('code');
+    expect(useApp.getState().notice).toBeNull();
+    type('a: 2\n');
+    expect(await save()).toBe(true);
+    expect(fake.state.files.get('/d/config.yaml')?.text).toBe('a: 2\n');
+  });
+
+  it('日志只读打开；内容追加后安静地重新载入，仍然只读', async () => {
+    fake.write('/d/app.log', 'line 1\n');
+    await openPath('/d/app.log');
+    expect(useApp.getState().readOnly).toBe(true);
+    expect(useApp.getState().notice?.text).toBe(t.logReadOnly);
+    useApp.getState().setNotice(null);
+    fake.write('/d/app.log', 'line 1\nline 2\n');
+    await onExternalChange('/d/app.log', 'modify');
+    expect(useApp.getState()).toMatchObject({ text: 'line 1\nline 2\n', readOnly: true });
+    expect(useApp.getState().notice).toBeNull();
+  });
+
+  it('过大的文件只读；可能含密钥的文件提醒；Markdown 不受影响', async () => {
+    fake.write('/d/big.json', 'x'.repeat(READ_ONLY_BYTES + 1));
+    await openPath('/d/big.json');
+    expect(useApp.getState().readOnly).toBe(true);
+    fake.write('/d/.env', 'TOKEN=1\n');
+    await openPath('/d/.env');
+    expect(useApp.getState()).toMatchObject({ readOnly: false, notice: { text: t.sensitiveFile } });
+    fake.write('/d/big.md', 'x'.repeat(READ_ONLY_BYTES + 1));
+    await openPath('/d/big.md');
+    expect(useApp.getState().readOnly).toBe(false);
+    expect(editorKind(useApp.getState())).not.toBe('code');
+  });
+
+  it('有未保存的修改时被外部修改：不合并，只提示（保存时走冲突处理）', async () => {
+    fake.write('/d/config.toml', 'a = 1\n');
+    await openPath('/d/config.toml');
+    type('a = 2\n');
+    fake.write('/d/config.toml', 'a = 3\n');
+    await onExternalChange('/d/config.toml', 'modify');
+    expect(useApp.getState()).toMatchObject({ text: 'a = 2\n', merge: null, notice: { text: t.externalChangedText, error: true } });
+  });
+
+  it('Markdown 里链接到文本文件：在应用里打开', async () => {
+    fake.write('/d/a.md', '[c](conf/app.yaml)');
+    fake.write('/d/conf/app.yaml', 'a: 1\n');
+    await openPath('/d/a.md');
+    await openLink('conf/app.yaml', 'url');
+    expect(useApp.getState().filePath).toBe('/d/conf/app.yaml');
+  });
+});
+
+describe('文件编码', () => {
+  it('GBK 文件：提示编码，保存时按 GBK 写回', async () => {
+    fake.write('/d/old.txt', '旧笔记');
+    fake.state.encodings.set('/d/old.txt', 'GBK');
+    await openPath('/d/old.txt');
+    expect(useApp.getState()).toMatchObject({ encoding: 'GBK', notice: { text: t.encodingDetected('GBK') } });
+    type('旧笔记，改过');
+    expect(await save()).toBe(true);
+    expect(fake.state.savedEncodings).toEqual(['GBK']);
+    expect(useApp.getState().encoding).toBe('GBK');
+  });
+
+  it('有 GBK 存不下的字符：问用户，同意就改存成 UTF-8；不同意什么都不写', async () => {
+    fake.write('/d/old.txt', '旧笔记');
+    fake.state.encodings.set('/d/old.txt', 'GBK');
+    await openPath('/d/old.txt');
+    type('旧笔记 🎉');
+    fake.state.unmappableAnswer = false;
+    expect(await save()).toBe(false);
+    expect(fake.state.files.get('/d/old.txt')?.text).toBe('旧笔记');
+    fake.state.unmappableAnswer = true;
+    expect(await save()).toBe(true);
+    expect(fake.state.asked).toEqual(['unmappable:old.txt:GBK', 'unmappable:old.txt:GBK']);
+    expect(fake.state.savedEncodings).toEqual(['UTF-8']);
+    expect(useApp.getState()).toMatchObject({ encoding: 'UTF-8', dirty: false });
+  });
+
+  it('按其他编码重新打开；读不通只在状态栏提示；转成 UTF-8 立即保存', async () => {
+    fake.write('/d/a.conf', 'x=1\n');
+    await openPath('/d/a.conf');
+    expect(useApp.getState().encoding).toBe('UTF-8');
+    expect(await reopenWithEncoding('big5')).toBe(true);
+    expect(useApp.getState().encoding).toBe('BIG5');
+    fake.state.badEncodings = ['shift_jis'];
+    expect(await reopenWithEncoding('shift_jis')).toBe(false);
+    expect(useApp.getState()).toMatchObject({ encoding: 'BIG5', notice: { error: true } });
+    expect(fake.state.errors).toHaveLength(0);
+    expect(await convertToUtf8()).toBe(true);
+    expect(fake.state.savedEncodings).toEqual(['UTF-8']);
+    expect(useApp.getState().encoding).toBe('UTF-8');
   });
 });

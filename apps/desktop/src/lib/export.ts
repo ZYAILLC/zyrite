@@ -6,7 +6,7 @@ import { locale, t } from '../i18n';
 import { useApp } from '../store';
 import { deps } from './document';
 import { activeEditor } from './editorRef';
-import { basename, dirname, isUrl, resolvePath } from './paths';
+import { basename, dirname, isMarkdownDoc, isUrl, resolvePath } from './paths';
 import { typoraCss } from './typoraTheme';
 
 /**
@@ -156,6 +156,11 @@ function notify(text: string, error = false) {
 }
 
 async function run(label: string, fn: () => Promise<string | null>) {
+  // 导出只用于 Markdown：文本文件（YAML、日志等）没有排版可导出
+  if (!isMarkdownDoc(useApp.getState().filePath)) {
+    notify(t.exportMarkdownOnly, true);
+    return;
+  }
   try {
     const out = await fn();
     if (out) notify(t.exported(label, basename(out)));

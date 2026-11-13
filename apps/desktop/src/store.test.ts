@@ -81,6 +81,10 @@ describe('useApp', () => {
     expect([s().showSource, s().showPreview]).toEqual([true, true]);
     useApp.setState({ showPreview: false, soloSource: 'plain' });
     expect(editorKind(s())).toBe('source');
+    // 文本文件不管开关，都用文本文件编辑器
+    useApp.setState({ filePath: '/a/config.yaml' });
+    expect(editorKind(s())).toBe('code');
+    useApp.setState({ filePath: null });
   });
 
   it('跟随系统时切主题：从当前显示的主题往下切，并改成固定主题', () => {

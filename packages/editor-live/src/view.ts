@@ -4,19 +4,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import { languages } from '@codemirror/language-data';
-import {
-  closeSearchPanel,
-  findNext,
-  findPrevious,
-  getSearchQuery,
-  openSearchPanel,
-  replaceAll,
-  replaceNext,
-  search,
-  SearchQuery,
-  searchPanelOpen,
-  setSearchQuery,
-} from '@codemirror/search';
+import { search } from '@codemirror/search';
 import { Compartment, EditorSelection, EditorState, type Extension } from '@codemirror/state';
 import {
   crosshairCursor,
@@ -34,13 +22,12 @@ import {
   defaultLabels,
   type EditorHandle,
   type EditorOptions,
-  type FindAdapter,
-  type FindQuery,
 } from '@zyrite/editor-common';
 import { blockIndexAt, htmlToMarkdown, splitBlocks } from '@zyrite/md-blocks';
 import { annotationField, annotations, setAnnotations } from './annotate';
 import { inCode, linkCompletion } from './complete';
 import { detectEol, offsetToPos, posToOffset } from './eol';
+import { searchAdapter } from './find';
 import { focusModePlugin, linksChanged, livePreview } from './preview';
 import { zyriteMarkdown } from './syntax';
 import { liveTheme } from './theme';
@@ -181,56 +168,7 @@ export function createLiveEditor(opts: LiveOptions): EditorHandle {
     view.focus();
   }
 
-  // ---------- 查找替换（CodeMirror 的搜索状态 + 隐藏的面板） ----------
-  function stats(): { count: number; current: number } {
-    const query = getSearchQuery(view.state);
-    if (!query.valid) return { count: 0, current: 0 };
-    const { from, to } = view.state.selection.main;
-    let count = 0;
-    let current = 0;
-    const cursor = query.getCursor(view.state);
-    for (let r = cursor.next(); !r.done && count < 10000; r = cursor.next()) {
-      count++;
-      if (r.value.from === from && r.value.to === to) current = count;
-    }
-    return { count, current };
-  }
-
-  const find: FindAdapter = {
-    setQuery(q: FindQuery) {
-      const query = new SearchQuery({
-        search: q.search,
-        replace: q.replace,
-        caseSensitive: q.caseSensitive,
-        regexp: q.regexp,
-      });
-      if (!searchPanelOpen(view.state)) openSearchPanel(view);
-      view.dispatch({ effects: setSearchQuery.of(query) });
-      return stats();
-    },
-    next() {
-      if (getSearchQuery(view.state).valid) findNext(view);
-      return stats();
-    },
-    prev() {
-      if (getSearchQuery(view.state).valid) findPrevious(view);
-      return stats();
-    },
-    replace() {
-      if (getSearchQuery(view.state).valid) replaceNext(view);
-      return stats();
-    },
-    replaceAll() {
-      if (!getSearchQuery(view.state).valid) return 0;
-      const before = stats().count;
-      replaceAll(view);
-      return before;
-    },
-    close() {
-      closeSearchPanel(view);
-      view.focus();
-    },
-  };
+  const find = searchAdapter(view);
 
   return {
     getText,

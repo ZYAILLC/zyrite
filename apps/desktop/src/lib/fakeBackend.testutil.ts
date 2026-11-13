@@ -32,6 +32,11 @@ export function fakeBackend() {
     unsavedAnswer: 'cancel' as UnsavedChoice,
     conflictAnswer: 'cancel' as ConflictChoice,
     savePick: null as string | null,
+    /** 打开时报告的编码（按路径），没有的是 UTF-8 */
+    encodings: new Map<string, string>(),
+    badEncodings: [] as string[],
+    unmappableAnswer: true,
+    savedEncodings: [] as string[],
     folderPick: null as string | null,
     asked: [] as string[],
     errors: [] as string[],
@@ -73,14 +78,27 @@ export function fakeBackend() {
     pickOpen: async () => null,
     pickSave: async () => state.savePick,
     pickFolder: async () => state.folderPick,
-    listMarkdown: async (root) =>
+    listDocuments: async (root) =>
       [...files.keys()].filter((p) => p.startsWith(`${root}/`)).map((p) => p.slice(root.length + 1)),
     async openFile(path) {
       const f = files.get(path);
       if (!f) throw new FileError('notFound', path);
-      return { path, ...f };
+      return { path, ...f, encoding: state.encodings.get(path) ?? 'UTF-8' };
     },
-    async saveFile(path, text, expected) {
+    async openFileAs(path, encoding) {
+      const f = files.get(path);
+      if (!f) throw new FileError('notFound', path);
+      if (state.badEncodings.includes(encoding)) throw new FileError('decode', path);
+      return { path, ...f, encoding: encoding.toUpperCase() };
+    },
+    async askUnmappable(name, encoding) {
+      state.asked.push(`unmappable:${name}:${encoding}`);
+      return state.unmappableAnswer;
+    },
+    async saveFile(path, text, expected, encoding) {
+      // 模拟 GBK 等编码存不下表情
+      if (encoding && encoding !== 'UTF-8' && /\p{Extended_Pictographic}/u.test(text)) throw new FileError('unmappable', path);
+      state.savedEncodings.push(encoding ?? 'UTF-8');
       const cur = files.get(path);
       if (expected && cur && cur.stamp.modifiedMs !== expected.modifiedMs) {
         throw new FileError('conflict', path, cur.stamp);

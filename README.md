@@ -34,6 +34,7 @@ Coding agents like Claude Code, Cursor and Codex now write a lot of Markdown: pl
 - Obsidian syntax: `[[wikilinks]]`, `![[image.png|200]]` and `![[note#section]]` embeds, `#tags`, `> [!note]` callouts, `==highlights==`.
 - Emoji shortcodes (`:rocket:`), superscript (`x^2^`), optional subscript (`H~2~O`), `[TOC]`, and local audio and video.
 - Regex find and replace, multiple cursors, focus mode, typewriter mode, and a Color button for selected text.
+- **Other text files, too:** YAML, JSON, TOML, `.conf` / `.ini`, XML, CSV, Dockerfiles, shell scripts, code and logs open in a plain-text editor with line numbers, folding and syntax highlighting. JSON, YAML and TOML are checked as you type. Logs open read-only and follow new lines. Files in GBK, Big5, Shift-JIS and other legacy encodings are detected and saved back in the same encoding. Nothing is ever run.
 
 ![Mermaid mind map, display math and a table in the preview](docs/images/screenshot-diagrams.jpg)
 

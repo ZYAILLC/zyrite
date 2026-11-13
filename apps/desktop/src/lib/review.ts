@@ -4,6 +4,7 @@ import { useApp } from '../store';
 import { type Stamp, FileError } from './backend';
 import { deps, persistSession } from './document';
 import { activeEditor } from './editorRef';
+import { isMarkdownDoc } from './paths';
 import { relInVault } from './vault';
 
 /**
@@ -82,8 +83,9 @@ export async function refreshReview(): Promise<void> {
   const seq = ++refreshSeq;
   const s = useApp.getState();
   const path = s.filePath;
-  if (!path || !s.folder || relInVault(path) === null || s.dirty) {
-    if (!path || relInVault(path) === null) useApp.setState({ review: null });
+  // 按块审阅只用于 Markdown：文本文件被外部修改时直接重新载入（有未保存的修改时保存会走冲突处理）
+  if (!path || !s.folder || relInVault(path) === null || !isMarkdownDoc(path) || s.dirty) {
+    if (!path || relInVault(path) === null || !isMarkdownDoc(path)) useApp.setState({ review: null });
     return;
   }
   let data;
@@ -157,10 +159,14 @@ export async function refreshReview(): Promise<void> {
 async function writeDisk(path: string, text: string): Promise<boolean> {
   const s = useApp.getState();
   try {
-    const stamp = await deps.backend.saveFile(path, text, s.filePath === path ? s.stamp : null);
+    const same = s.filePath === path;
+    const stamp = await deps.backend.saveFile(path, text, same ? s.stamp : null, same ? s.encoding : undefined);
     await deps.backend.baselineSet(path, text);
     if (useApp.getState().filePath === path) {
-      useApp.getState().loadDoc({ filePath: path, text, savedText: text, stamp, dirty: false }, { keepView: true });
+      useApp.getState().loadDoc(
+        { filePath: path, text, savedText: text, stamp, dirty: false, encoding: useApp.getState().encoding },
+        { keepView: true },
+      );
       await persistSession();
     }
     return true;
