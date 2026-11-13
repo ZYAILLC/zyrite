@@ -1,0 +1,19 @@
+node_modules/
+dist/
+target/
+*.log
+.DS_Store
+.vite/
+# Tauri 生成的 schema
+apps/desktop/src-tauri/gen/
+
+# AI 工具的本地文件（不上传，见 z-y-open 的规则）
+.claude/
+.cursor/
+.codex/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+.env
+.env.*
+!.env.example

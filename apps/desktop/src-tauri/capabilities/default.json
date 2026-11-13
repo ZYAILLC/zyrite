@@ -1,0 +1,24 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "主窗口：自绘标题栏需要的窗口操作、文件对话框、用系统浏览器打开链接",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-minimize",
+    "core:window:allow-close",
+    "core:window:allow-set-title",
+    "core:window:allow-request-user-attention",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-theme",
+    "core:window:allow-destroy",
+    "dialog:default",
+    "opener:default",
+    "opener:allow-reveal-item-in-dir"
+  ]
+}

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- 占位图标：纸色底 + 墨色 Z。正式图标待设计。 -->
+  <rect x="100" y="100" width="824" height="824" rx="184" fill="#F7F6F3"/>
+  <rect x="100.5" y="100.5" width="823" height="823" rx="183.5" fill="none" stroke="#E8E6E1" stroke-width="1"/>
+  <path d="M352 352h320L352 672h320" fill="none" stroke="#1D1D1F" stroke-width="56" stroke-linecap="square" stroke-linejoin="miter"/>
+</svg>

@@ -1,0 +1,270 @@
+/*
+ * 实时预览的正文排版。内容区是 #write.zy-doc.zy-live（CodeMirror 的 .cm-content），
+ * 字体、字号、行高、宽度沿用 editor-common/content.css 的 .zy-doc，这里只补 CodeMirror 特有的部分。
+ * 注意：CodeMirror 的行（.cm-line）和块级部件不能有 margin，间距一律用 padding。
+ */
+
+#write.zy-live {
+  margin: 0 auto;
+  padding: var(--zy-doc-padding);
+  white-space: pre-wrap;
+}
+
+/* 纯源码（原文 + 预览分栏时的原文栏）：等宽字体、原样显示 Markdown，不受正文排版和 Typora 主题影响 */
+.cm-content.zy-source {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: calc(var(--zy-line-width, 720px) + 56px);
+  margin: 0 auto;
+  padding: 28px 28px 56px;
+  font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'PingFang SC', 'Microsoft YaHei', monospace;
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: var(--z-text);
+  caret-color: var(--z-text);
+  white-space: pre-wrap;
+}
+
+/* 标题：始终按标题字号显示，光标不在时隐藏 # */
+#write.zy-live .zy-h {
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+#write.zy-live .zy-h1 {
+  font-size: 30px;
+  line-height: 1.35;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  padding-bottom: 8px;
+}
+
+#write.zy-live .zy-h2 {
+  font-size: 21px;
+  padding-top: 12px;
+}
+
+#write.zy-live .zy-h3 {
+  font-size: 18px;
+  padding-top: 8px;
+}
+
+#write.zy-live .zy-h4 {
+  font-size: 16px;
+  padding-top: 4px;
+}
+
+#write.zy-live .zy-h5,
+#write.zy-live .zy-h6 {
+  font-size: 15px;
+  color: var(--z-muted);
+}
+
+/* 光标所在块露出来的 Markdown 标记 */
+#write.zy-live .zy-syntax {
+  color: var(--z-muted);
+}
+
+#write.zy-live .zy-h .zy-syntax {
+  font-weight: 400;
+}
+
+#write.zy-live .zy-em {
+  font-style: italic;
+}
+
+#write.zy-live .zy-strong {
+  font-weight: 600;
+}
+
+#write.zy-live .zy-del {
+  text-decoration: line-through;
+  color: var(--z-muted);
+}
+
+#write.zy-live .zy-hl {
+  background: color-mix(in srgb, var(--z-accent) 16%, transparent);
+}
+
+#write.zy-live .zy-icode {
+  font-family: var(--z-font-mono);
+  font-size: 0.86em;
+  background: var(--z-code);
+  padding: 1px 0;
+  border-radius: 3px;
+}
+
+#write.zy-live .zy-link {
+  color: var(--z-accent);
+  text-decoration: underline;
+  text-decoration-color: var(--z-link-line);
+  text-underline-offset: 3px;
+}
+
+/* 链接到不存在的笔记：虚线下划线，点击创建 */
+#write.zy-live .zy-link-missing {
+  text-decoration-style: dashed;
+  text-decoration-color: var(--z-muted);
+}
+
+#write.zy-live .zy-tag {
+  color: var(--z-accent);
+}
+
+/* 脚注：正文里是上标编号，定义行开头是灰色小号标签 */
+#write.zy-live .zy-fnref {
+  color: var(--z-accent);
+  font-size: 0.75em;
+  vertical-align: super;
+  line-height: 0;
+  margin: 0 1px;
+}
+
+#write.zy-live .zy-fndef {
+  color: var(--z-muted);
+  font-size: 0.86em;
+  margin-right: 2px;
+}
+
+#write.zy-live .zy-math-src {
+  font-family: var(--z-font-mono);
+  font-size: 0.86em;
+}
+
+#write.zy-live .zy-listmark,
+#write.zy-live .zy-bullet {
+  color: var(--z-muted);
+}
+
+#write.zy-live .zy-task {
+  width: 14px;
+  height: 14px;
+  margin: 0 6px 0 0;
+  vertical-align: -2px;
+  accent-color: var(--z-accent);
+  cursor: pointer;
+}
+
+#write.zy-live .zy-task-done {
+  color: var(--z-muted);
+}
+
+#write.zy-live .zy-hr {
+  display: inline-block;
+  width: 100%;
+  vertical-align: middle;
+  border-top: 1px solid var(--z-hair);
+}
+
+#write.zy-live .zy-quote {
+  border-left: 2px solid var(--z-hair);
+  padding-left: 16px;
+  color: var(--z-muted);
+}
+
+#write.zy-live .callout-mark {
+  color: var(--z-accent);
+  font-size: 0.86em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* 代码块、公式块源码、frontmatter 源码 */
+#write.zy-live .zy-codeblock {
+  font-family: var(--z-font-mono);
+  font-size: 13px;
+  line-height: 1.65;
+  background: var(--z-code);
+  padding: 0 16px;
+}
+
+#write.zy-live .zy-codeblock-first {
+  padding-top: 10px;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
+
+#write.zy-live .zy-codeblock-last {
+  padding-bottom: 10px;
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+/* 不是当前块时，围栏行只留一点空隙；开头一行在右侧显示语言名（和所见即所得一致） */
+#write.zy-live .zy-fence-line {
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: right;
+}
+
+/* 代码按源码原样显示，关掉等宽字体的连字（否则 != 会显示成 ≠） */
+#write.zy-live .zy-codeblock,
+#write.zy-live .zy-icode,
+#write.zy-live .zy-table-src,
+#write.zy-live .zy-math-src {
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'calt' 0;
+}
+
+#write.zy-live .zy-fence-lang {
+  font: 11px var(--z-font-ui);
+  color: var(--z-muted);
+}
+
+#write.zy-live .zy-table-src {
+  font-family: var(--z-font-mono);
+  font-size: 13px;
+}
+
+/* 渲染后的块 */
+#write.zy-live .zy-live-table {
+  padding: 2px 0 10px;
+  overflow-x: auto;
+  cursor: text;
+}
+
+#write.zy-live .zy-live-table table {
+  margin: 0;
+}
+
+#write.zy-live .zy-live-figure {
+  padding: 4px 0 12px;
+}
+
+#write.zy-live .zy-live-figure .zy-figure {
+  margin: 0;
+}
+
+#write.zy-live .zy-live-frontmatter {
+  padding: 0 0 12px;
+}
+
+#write.zy-live .zy-live-frontmatter .zy-frontmatter-summary {
+  margin: 0;
+}
+
+#write.zy-live .zy-live-img {
+  max-width: 100%;
+  vertical-align: bottom;
+}
+
+/* 批注：下划线 + 上标编号 */
+.cm-content.zy-source .zy-ann,
+#write.zy-live .zy-ann {
+  text-decoration: underline;
+  text-decoration-color: var(--z-ai);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.cm-content.zy-source .zy-ann.resolved,
+#write.zy-live .zy-ann.resolved {
+  text-decoration-color: var(--z-hair);
+}
+
+.cm-content.zy-source .zy-ann-n,
+#write.zy-live .zy-ann-n {
+  color: var(--z-ai);
+  font: 600 10px var(--z-font-mono);
+  margin-left: 1px;
+}

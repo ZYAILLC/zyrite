@@ -1,0 +1,18 @@
+[package]
+name = "zyrite-export"
+description = "Zyrite 导出：Word（.docx）生成（不捆绑 pandoc）"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+base64 = "0.22"
+docx-rs = { version = "0.4", default-features = false }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+[dev-dependencies]
+serde_json = "1"
+zip = { version = "2", default-features = false, features = ["deflate"] }

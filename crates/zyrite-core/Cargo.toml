@@ -1,0 +1,22 @@
+[package]
+name = "zyrite-core"
+description = "Zyrite 核心库：文件读写、库（文件树、监听、文件操作）、恢复缓存（以后加入索引、链接图、审阅、批注）"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+getrandom = "0.3"
+hmac = "0.12"
+ignore = "0.4"
+notify = "8"
+notify-debouncer-full = "0.6"
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tempfile = "3"
+thiserror = "2"
+trash = "5"
