@@ -178,11 +178,16 @@ mod tests {
             Some(ChangeKind::Create),
             "{changes:?}"
         );
-        assert_eq!(
-            find("old.md").map(|c| c.kind),
-            Some(ChangeKind::Modify),
-            "{changes:?}"
-        );
+        // macOS 的 FSEvents 会把改动已有文件也带上"创建"标记，报成 Create；其他平台是 Modify
+        let old = find("old.md").map(|c| c.kind);
+        if cfg!(target_os = "macos") {
+            assert!(
+                matches!(old, Some(ChangeKind::Modify | ChangeKind::Create)),
+                "{changes:?}"
+            );
+        } else {
+            assert_eq!(old, Some(ChangeKind::Modify), "{changes:?}");
+        }
         assert!(find("atomic.md").is_some(), "{changes:?}");
         assert!(find(".zyrite-tmp.tmp").is_none());
         assert!(find("drafts/secret.md").is_none());
