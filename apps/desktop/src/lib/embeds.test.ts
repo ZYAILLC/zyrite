@@ -17,6 +17,8 @@ beforeEach(async () => {
   fake.write('/v/notes/pic.png', '');
   fake.write('/v/assets/deep/logo.png', '');
   fake.write('/v/assets/logo.png', '');
+  fake.write('/v/notes/clip.mp4', '');
+  fake.write('/v/media/deep/song.MP3', '');
   useApp.getState().setFolder('/v');
   await refreshTree();
   await openIndex();
@@ -43,6 +45,28 @@ describe('图片嵌入', () => {
 
   it('找不到的图片返回 null', () => {
     expect(resolveEmbed('nope.png')).toBeNull();
+  });
+});
+
+describe('视频、音频嵌入', () => {
+  it('和图片一样找文件，视频显示播放器，可带宽度', () => {
+    expect(resolveEmbed('clip.mp4|320')).toEqual({
+      kind: 'media',
+      media: 'video',
+      src: 'asset:///v/notes/clip.mp4',
+      alt: 'clip.mp4',
+      width: 320,
+      height: undefined,
+    });
+  });
+
+  it('只写文件名时在整个库里找；扩展名大小写不敏感', () => {
+    expect(resolveEmbed('song.MP3')).toMatchObject({ kind: 'media', media: 'audio', src: 'asset:///v/media/deep/song.MP3' });
+  });
+
+  it('| 后面是说明文字；找不到时返回 null', () => {
+    expect(resolveEmbed('clip.mp4|Demo')).toMatchObject({ kind: 'media', alt: 'Demo' });
+    expect(resolveEmbed('nope.webm')).toBeNull();
   });
 });
 

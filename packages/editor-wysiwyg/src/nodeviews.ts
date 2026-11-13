@@ -9,9 +9,18 @@ import {
 } from '@codemirror/view';
 import {
   codeHighlightStyle,
+  createMedia,
   defaultLabels,
+  delimiterFor,
   type EditorLabels,
   findLanguage,
+  isGraphvizLang,
+  isRemoteUrl,
+  mediaKind,
+  remoteMediaLink,
+  renderCsv,
+  renderGraphviz,
+  renderMarkmap,
   renderMath,
   renderEmbed,
   renderMarkdown,
@@ -34,7 +43,8 @@ type GetPos = () => number | undefined;
 
 /**
  * 代码块、公式块、源码块：内嵌一个 CodeMirror（参照 prosemirror.net 的 codemirror 示例）。
- * - code_block：语法高亮，右上角可改语言；mermaid 代码块平时只显示图，点开看源码
+ * - code_block：语法高亮，右上角可改语言；mermaid、dot / graphviz、markmap 代码块平时只显示图，
+ *   csv / tsv 代码块平时显示成表格，点开看源码
  * - math_block：平时显示公式，点开看源码
  * - raw_block：HTML、引用定义、脚注定义等无法所见即所得的块，直接编辑源码；frontmatter 默认折叠成一行
  */
@@ -118,19 +128,32 @@ export class CodeView implements NodeView {
     this.refreshPreview();
   }
 
-  /** 平时显示渲染结果（公式、Mermaid、折叠的 frontmatter），编辑时显示源码 */
+  /** 平时显示渲染结果（公式、Mermaid、Graphviz、Markmap、CSV 表格、折叠的 frontmatter），编辑时显示源码 */
   private hasPreview(): boolean {
     const n = this.node;
     return (
       n.type.name === 'math_block' ||
-      (n.type.name === 'code_block' && n.attrs.lang === 'mermaid') ||
+      (n.type.name === 'code_block' && this.figureKind() !== null) ||
       (n.type.name === 'raw_block' && ['yaml', 'html', 'footnote'].includes(n.attrs.kind as string))
     );
   }
 
-  /** HTML 块、脚注定义：渲染结果照常排版，不像公式、图那样居中并加上下细线 */
+  /** 代码块渲染成哪种图表；普通代码块返回 null */
+  private figureKind(): 'mermaid' | 'graphviz' | 'markmap' | 'csv' | null {
+    if (this.node.type.name !== 'code_block') return null;
+    const lang = String(this.node.attrs.lang ?? '').toLowerCase();
+    if (lang === 'mermaid' || lang === 'markmap') return lang;
+    if (isGraphvizLang(lang)) return 'graphviz';
+    if (delimiterFor(lang)) return 'csv';
+    return null;
+  }
+
+  /** HTML 块、脚注定义、CSV 表格：渲染结果照常排版，不像公式、图那样居中并加上下细线 */
   private plainPreview(): boolean {
-    return this.node.type.name === 'raw_block' && (this.node.attrs.kind === 'html' || this.node.attrs.kind === 'footnote');
+    return (
+      (this.node.type.name === 'raw_block' && (this.node.attrs.kind === 'html' || this.node.attrs.kind === 'footnote')) ||
+      this.figureKind() === 'csv'
+    );
   }
 
   private setEditing(on: boolean) {
@@ -165,14 +188,19 @@ export class CodeView implements NodeView {
       this.figure = document.createElement('div');
       this.figure.className = 'zy-figure';
       this.figure.setAttribute('role', 'img');
-      this.figure.addEventListener('mousedown', (e) => {
-        if (this.editing) return;
-        // HTML 块里的折叠标题、链接、播放器照常可用，不进入编辑
-        if ((e.target as HTMLElement).closest('summary, a, video, audio')) return;
-        e.preventDefault();
-        this.setEditing(true);
-        this.cm.focus();
-      });
+      // 捕获阶段处理：Markmap 会拦下节点上的 mousedown，冒泡阶段收不到
+      this.figure.addEventListener(
+        'mousedown',
+        (e) => {
+          if (this.editing) return;
+          // HTML 块里的折叠标题、链接、播放器，思维导图折叠分支的圆点照常可用，不进入编辑
+          if ((e.target as Element).closest('summary, a, video, audio, .markmap-node > circle')) return;
+          e.preventDefault();
+          this.setEditing(true);
+          this.cm.focus();
+        },
+        true,
+      );
       this.figure.addEventListener('click', (e) => {
         const a = (e.target as HTMLElement).closest('a');
         if (!a) return;
@@ -185,13 +213,20 @@ export class CodeView implements NodeView {
     this.figure.classList.toggle('zy-figure-plain', this.plainPreview());
     if (this.figure.parentNode !== this.dom) this.dom.append(this.figure);
     const text = this.node.textContent;
-    const key = `${this.node.type.name}:${this.node.attrs.kind ?? ''}:${text}`;
+    const kind = this.figureKind();
+    const key = `${this.node.type.name}:${this.node.attrs.kind ?? ''}:${this.node.attrs.lang ?? ''}:${text}`;
     if (key !== this.rendered) {
       this.rendered = key;
       this.figure.setAttribute('aria-label', text);
+      // 换了语言时去掉上一种图表的类名和错误样式
+      this.figure.classList.remove('zy-graphviz', 'zy-markmap', 'zy-csv', 'mermaid-error');
+      if (kind && kind !== 'mermaid') this.figure.classList.add(`zy-${kind}`);
       if (this.node.type.name === 'math_block') renderMath(this.figure, text, true);
       else if (this.node.attrs.kind === 'html') this.renderHtmlBlock(text);
       else if (this.node.attrs.kind === 'footnote') this.renderFootnote(text);
+      else if (kind === 'graphviz') void renderGraphviz(this.figure, text);
+      else if (kind === 'markmap') void renderMarkmap(this.figure, text);
+      else if (kind === 'csv') renderCsv(this.figure, text, delimiterFor(this.node.attrs.lang)!);
       else void renderMermaid(this.figure, text);
     }
   }
@@ -576,6 +611,8 @@ export class InlineSourceView implements NodeView {
   }
 
   stopEvent(e: Event): boolean {
+    // 嵌入的视频、音频：播放器的控件照常可用
+    if ((e.target as Element | null)?.closest?.('video, audio')) return true;
     return !!this.input && e.target === this.input;
   }
 
@@ -663,32 +700,72 @@ export class ListItemView implements NodeView {
   }
 }
 
-/** 图片：本地相对路径经 resolveUrl 转换 */
+/**
+ * 图片：本地相对路径经 resolveUrl 转换。
+ * 地址指向视频、音频（`![说明](clip.mp4)`）时显示播放器；网络上的视频、音频不加载，显示成链接。
+ */
 export class ImageView implements NodeView {
-  dom: HTMLImageElement;
+  dom: HTMLElement;
+  /** 当前显示的样子：图片、视频、音频或网络链接；变了就让 ProseMirror 重建 */
+  private readonly shape: string;
 
   constructor(
     private node: PMNode,
     private readonly resolveUrl?: ResolveUrl,
   ) {
-    this.dom = document.createElement('img');
+    this.shape = ImageView.shapeOf(node);
+    const src = String(node.attrs.src ?? '');
+    const kind = mediaKind(src);
+    const label = String(node.attrs.alt ?? '');
+    if (!kind) this.dom = document.createElement('img');
+    else if (isRemoteUrl(src)) this.dom = remoteMediaLink(src, label);
+    else this.dom = createMedia(kind, this.url(src), label);
+    if (kind) this.dom.contentEditable = 'false';
     this.sync();
+  }
+
+  private static shapeOf(node: PMNode): string {
+    const src = String(node.attrs.src ?? '');
+    const kind = mediaKind(src);
+    return kind ? `${kind}${isRemoteUrl(src) ? ':remote' : ''}` : 'image';
+  }
+
+  private url(src: string): string {
+    return this.resolveUrl ? this.resolveUrl(src) : src;
   }
 
   private sync() {
     const a = this.node.attrs;
     const src = String(a.src ?? '');
-    this.dom.src = this.resolveUrl ? this.resolveUrl(src) : src;
-    this.dom.alt = a.alt ?? '';
-    if (a.title) this.dom.title = a.title;
-    else this.dom.removeAttribute('title');
+    const dom = this.dom;
+    if (dom instanceof HTMLImageElement) {
+      dom.src = this.url(src);
+      dom.alt = a.alt ?? '';
+      if (a.title) dom.title = a.title;
+      else dom.removeAttribute('title');
+    } else if (dom instanceof HTMLMediaElement) {
+      const url = this.url(src);
+      // 地址没变时不重设，避免播放中被打断
+      if (dom.getAttribute('src') !== url) dom.src = url;
+      const label = String(a.title ?? a.alt ?? '');
+      dom.title = label;
+      dom.setAttribute('aria-label', label);
+    } else if (dom instanceof HTMLAnchorElement) {
+      dom.href = src;
+      dom.textContent = a.alt || src;
+    }
   }
 
   update(node: PMNode): boolean {
-    if (node.type !== this.node.type) return false;
+    if (node.type !== this.node.type || ImageView.shapeOf(node) !== this.shape) return false;
     this.node = node;
     this.sync();
     return true;
+  }
+
+  /** 播放器的控件照常可用，不让 ProseMirror 把点击当成选中节点 */
+  stopEvent(e: Event): boolean {
+    return this.dom instanceof HTMLMediaElement && e.target === this.dom;
   }
 }
 

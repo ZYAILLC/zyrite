@@ -107,3 +107,32 @@ describe('批注和选区', () => {
     expect(ed.getText()).toBe('第一段 **粗体**。\n\n开头。\n\n这一句要改。\n');
   });
 });
+
+describe('图表和视频、音频', () => {
+  it('csv / tsv 代码块显示成表格，dot、markmap 显示成图；保存时源码不变', () => {
+    const src =
+      '```csv\nname,qty\n"a, b",2\n```\n\n```tsv\nx\ty\n```\n\n```dot\ndigraph { a -> b }\n```\n\n```markmap\n# A\n## B\n```\n';
+    const ed = mount(src);
+    const parent = parents[parents.length - 1]!;
+    const tables = parent.querySelectorAll('.zy-figure.zy-csv table');
+    expect(tables).toHaveLength(2);
+    expect(tables[0]!.querySelector('td')?.textContent).toBe('a, b');
+    expect(parent.querySelectorAll('.zy-figure.zy-graphviz')).toHaveLength(1);
+    expect(parent.querySelectorAll('.zy-figure.zy-markmap')).toHaveLength(1);
+    expect(ed.getText()).toBe(src);
+  });
+
+  it('图片语法指向视频、音频时显示播放器，网络地址显示成链接', () => {
+    const src = '![演示](clip.mp4) ![歌](song.mp3) ![远程](https://x.com/a.webm) ![图](a.png)\n';
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    parents.push(parent);
+    const ed = createWysiwygEditor({ parent, source: src, resolveUrl: (s) => `asset://${s}` });
+    expect(parent.querySelector('video')?.getAttribute('src')).toBe('asset://clip.mp4');
+    expect(parent.querySelector('audio')?.getAttribute('src')).toBe('asset://song.mp3');
+    expect(parent.querySelector('a.zy-media-link')?.getAttribute('href')).toBe('https://x.com/a.webm');
+    // ProseMirror 自己会插入不带 src 的占位 img，按 alt 找
+    expect(parent.querySelector('img[alt="图"]')?.getAttribute('src')).toBe('asset://a.png');
+    expect(ed.getText()).toBe(src);
+  });
+});

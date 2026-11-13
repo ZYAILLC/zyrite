@@ -21,6 +21,10 @@ pub const IGNORE_FILE: &str = ".zyriteignore";
 const IGNORED_DIRS: &[&str] = &["node_modules"];
 const MARKDOWN_EXT: &[&str] = &["md", "markdown", "mdown", "mkd", "mdx"];
 const IMAGE_EXT: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "avif"];
+/// 视频、音频：`![[clip.mp4]]` 嵌入要在库里按文件名找到它们
+const MEDIA_EXT: &[&str] = &[
+    "mp4", "webm", "mov", "m4v", "ogv", "mp3", "wav", "ogg", "m4a", "flac", "aac",
+];
 
 fn has_ext(name: &str, exts: &[&str]) -> bool {
     name.rsplit_once('.')
@@ -33,6 +37,10 @@ pub fn is_markdown(name: &str) -> bool {
 
 pub fn is_image(name: &str) -> bool {
     has_ext(name, IMAGE_EXT)
+}
+
+pub fn is_media(name: &str) -> bool {
+    has_ext(name, MEDIA_EXT)
 }
 
 fn walker(root: &Path) -> WalkBuilder {
@@ -88,7 +96,7 @@ pub struct TreeEntry {
     pub dir: bool,
 }
 
-/// 文件树：所有目录，加上 Markdown 和图片（`all_files` 时列出全部文件）
+/// 文件树：所有目录，加上 Markdown、图片和视频音频（`all_files` 时列出全部文件）
 pub fn list_tree(root: &Path, all_files: bool, limit: usize) -> io::Result<Vec<TreeEntry>> {
     fs::read_dir(root)?;
     let mut out = Vec::new();
@@ -102,7 +110,7 @@ pub fn list_tree(root: &Path, all_files: bool, limit: usize) -> io::Result<Vec<T
         let name = entry.file_name().to_string_lossy();
         if kind.is_dir() {
             out.push(TreeEntry { path, dir: true });
-        } else if all_files || is_markdown(&name) || is_image(&name) {
+        } else if all_files || is_markdown(&name) || is_image(&name) || is_media(&name) {
             out.push(TreeEntry { path, dir: false });
         }
         if out.len() >= limit {
@@ -248,6 +256,9 @@ mod tests {
             "docs/b.markdown",
             "docs/deep/c.MD",
             "docs/img/logo.png",
+            "media/clip.MP4",
+            "media/song.mp3",
+            "media/notes.srt",
             "notes.txt",
             ".git/x.md",
             ".obsidian/y.md",
@@ -272,7 +283,7 @@ mod tests {
     }
 
     #[test]
-    fn 文件树_含目录和图片() {
+    fn 文件树_含目录_图片和视频音频() {
         let dir = sample();
         let got: Vec<_> = list_tree(dir.path(), false, DEFAULT_LIMIT)
             .unwrap()
@@ -289,7 +300,10 @@ mod tests {
                 "docs/deep/c.MD",
                 "docs/img/",
                 "docs/img/logo.png",
-                "empty/"
+                "empty/",
+                "media/",
+                "media/clip.MP4",
+                "media/song.mp3"
             ]
         );
         let all = list_tree(dir.path(), true, DEFAULT_LIMIT).unwrap();

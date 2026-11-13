@@ -1,0 +1,80 @@
+/* Graphviz、Markmap、CSV / TSV 表格，以及视频、音频 */
+
+/* Graphviz：和 Mermaid 一样居中在上下两条细线之间；SVG 自带 pt 尺寸，窄栏里按比例缩小 */
+.zy-figure.zy-graphviz svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Markmap：铺满正文宽度，高度由脚本按节点数设定；颜色、字体跟主题走 */
+.zy-figure.zy-markmap {
+  padding: 8px 0;
+  overflow: hidden;
+}
+
+.zy-figure.zy-markmap svg.zy-markmap-svg {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.zy-markmap .markmap {
+  --markmap-text-color: var(--z-text);
+  --markmap-font: 400 14px/20px var(--z-font-ui, sans-serif);
+  --markmap-circle-open-bg: var(--z-bg);
+  --markmap-a-color: var(--z-accent);
+  --markmap-a-hover-color: var(--z-accent);
+  --markmap-code-bg: var(--z-code);
+  --markmap-code-color: var(--z-text);
+  --markmap-highlight-bg: var(--z-sel);
+}
+
+/* 折叠、展开分支的圆点可以点；其余地方点一下和其他图一样打开源码 */
+.zy-markmap .markmap-node > circle {
+  cursor: pointer;
+}
+
+/* CSV / TSV：和普通 Markdown 表格一样，左对齐、没有上下细线；太宽时横向滚动 */
+#write .zy-figure.zy-csv {
+  overflow-x: auto;
+}
+
+#write .zy-csv table {
+  margin: 0;
+}
+
+#write .zy-csv td,
+#write .zy-csv th {
+  white-space: pre-wrap;
+}
+
+/* 视频、音频：块状显示，不超过正文宽度 */
+#write video.zy-media {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  margin: 4px 0;
+  border-radius: 4px;
+  background: var(--z-code);
+}
+
+#write audio.zy-media {
+  display: block;
+  width: min(100%, 480px);
+  margin: 4px 0;
+}
+
+#write .zy-embed-media {
+  display: block;
+  text-decoration: none;
+}
+
+#write .zy-embed.zy-embed-media::before {
+  content: none;
+}
+
+/* 网络上的视频、音频不加载，显示成链接 */
+#write .zy-media-link::before {
+  content: '▶ ';
+  color: var(--z-muted);
+}
