@@ -55,6 +55,70 @@
         "role": "Editor",
         "mimeType": "text/markdown",
         "rank": "Default"
+      },
+      {
+        "ext": ["txt", "text"],
+        "name": "Plain Text",
+        "description": "Text document",
+        "role": "Editor",
+        "mimeType": "text/plain",
+        "rank": "Default"
+      },
+      {
+        "ext": ["json", "jsonc", "json5", "jsonl", "ndjson"],
+        "name": "JSON",
+        "description": "JSON file",
+        "role": "Editor",
+        "mimeType": "application/json",
+        "rank": "Default"
+      },
+      {
+        "ext": ["yaml", "yml"],
+        "name": "YAML",
+        "description": "YAML file",
+        "role": "Editor",
+        "mimeType": "application/yaml",
+        "rank": "Default"
+      },
+      {
+        "ext": ["toml"],
+        "name": "TOML",
+        "description": "TOML file",
+        "role": "Editor",
+        "mimeType": "application/toml",
+        "rank": "Default"
+      },
+      {
+        "ext": ["ini", "cfg", "conf", "config", "properties", "env"],
+        "name": "Configuration File",
+        "description": "Configuration file",
+        "role": "Editor",
+        "mimeType": "text/plain",
+        "rank": "Default"
+      },
+      {
+        "ext": ["csv", "tsv"],
+        "name": "CSV",
+        "description": "CSV file",
+        "role": "Editor",
+        "mimeType": "text/csv",
+        "rank": "Default"
+      },
+      {
+        "ext": ["xml"],
+        "name": "XML",
+        "description": "XML file",
+        "role": "Editor",
+        "mimeType": "application/xml",
+        "rank": "Default"
+      },
+      {
+        "ext": ["log", "out"],
+        "name": "Log File",
+        "description": "Log file",
+        "role": "Viewer",
+        "mimeType": "text/x-log",
+        "rank": "Default"
       }
     ],
     "macOS": {
@@ -62,7 +126,9 @@
       "signingIdentity": "-"
     },
     "windows": {
-      "webviewInstallMode": { "type": "downloadBootstrapper" }
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
     }
   }
 }
