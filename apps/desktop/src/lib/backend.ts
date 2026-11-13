@@ -3,9 +3,10 @@ import { listen } from '@tauri-apps/api/event';
 import { ask, message, open, save } from '@tauri-apps/plugin-dialog';
 import { openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 import { type Locale, t } from '../i18n';
+import { useApp } from '../store';
 import { dirname, isUrl, resolvePath } from './paths';
 import { isTauri } from './platform';
-import type { ImagePrefs } from './prefs';
+import { allowImage, type ImagePrefs } from './prefs';
 
 /**
  * 界面和系统之间的一层：文件读写、对话框、恢复缓存。
@@ -308,7 +309,7 @@ export interface Backend {
   revealInDir(path: string): Promise<void>;
   /** 放行这些文件（或文件夹）所在目录里的图片显示 */
   allowAssetDirs(paths: string[]): Promise<void>;
-  /** 正文里的图片地址 → 可以显示的 URL */
+  /** 正文里的图片地址 → 可以显示的 URL；关了"加载远程图片"时网络图片返回空串 */
   resolveImage(src: string, docPath: string | null): string;
   /** 本地文件的绝对路径 → 可以在页面里加载的 URL */
   fileUrl(path: string): string;
@@ -362,6 +363,14 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
   } catch (e) {
     throw toFileError(e);
   }
+}
+
+/**
+ * 网络图片按设置决定加不加载。设置从 store 读（store 只引用这里的类型，不会循环依赖）；
+ * 其他协议的地址（data:、blob:、asset: 等）原样返回。
+ */
+function remoteImage(src: string): string {
+  return allowImage(src, useApp.getState().image);
 }
 
 const tauriBackend: Backend = {
@@ -459,7 +468,8 @@ const tauriBackend: Backend = {
   onAiIndex: (fn) => listen<{ done: number; total: number }>('zyrite://ai-index', (e) => fn(e.payload)),
   aiRetrieve: (question, scope, k, embed) => call('ai_retrieve', { question, scope, k, embed, keyId: embed?.id ?? null }),
   resolveImage(src, docPath) {
-    if (!src || isUrl(src)) return src;
+    if (!src) return src;
+    if (isUrl(src)) return remoteImage(src);
     const abs = docPath ? resolvePath(dirname(docPath), decodeURI(src)) : src;
     return convertFileSrc(abs);
   },
@@ -841,7 +851,8 @@ export const webBackend: Backend = {
       .map(({ n, score }) => ({ rel: n.rel, line: 0, heading: '', text: n.text.slice(0, 800), score }));
   },
   resolveImage: (src, docPath) => {
-    if (!src || isUrl(src) || src.startsWith('data:')) return src;
+    if (!src) return src;
+    if (isUrl(src)) return remoteImage(src);
     const abs = docPath ? resolvePath(dirname(docPath), decodeURI(src)) : src;
     return readJson<Record<string, string>>(WEB_IMAGES, {})[abs] ?? src;
   },

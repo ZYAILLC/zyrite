@@ -80,6 +80,17 @@ export interface EditorHandle {
   destroy(): void;
 }
 
+/**
+ * `![[目标]]` 嵌入的内容：图片（`![[a.png|200]]` 可带宽度或 `宽x高`），或另一篇笔记（`![[笔记#标题]]` 只嵌入那一节）。
+ * 笔记内容异步读取，调用方负责截取标题对应的那一节。
+ */
+export type EmbedInfo =
+  | { kind: 'image'; src: string; alt: string; width?: number; height?: number }
+  | { kind: 'note'; title: string; load: () => Promise<string>; resolveUrl?: ResolveUrl };
+
+/** 解析 `![[…]]` 里的内容（不含 `![[` `]]`）；解析不了返回 null，照常显示成链接 */
+export type ResolveEmbed = (value: string) => EmbedInfo | null;
+
 /** 双链目标的状态：库里有这篇笔记、没有（显示成虚线）、附件或无法判断（照常显示） */
 export type LinkStatusFn = (target: string) => 'note' | 'missing' | 'other';
 
@@ -100,6 +111,8 @@ export interface EditorOptions {
   labels?: Partial<EditorLabels>;
   /** 判断双链 `[[目标]]` 是否存在；不传则都按存在显示 */
   linkStatus?: LinkStatusFn;
+  /** 解析 `![[…]]` 嵌入（图片、笔记）；不传则嵌入显示成链接 */
+  resolveEmbed?: ResolveEmbed;
   /** 输入 `[[` 后的笔记补全；不传则不弹 */
   completeLinks?: (query: string) => { label: string; detail?: string; insert: string }[];
   /** 粘贴了图片（文件，或 blob:/data: 地址）：返回 true 表示已处理，编辑器不再插入 */

@@ -16,6 +16,8 @@ export interface ImagePrefs {
   picgoUrl: string;
   /** 自定义命令：图片路径作为最后一个参数，输出里的最后一个 URL 就是图片地址 */
   command: string;
+  /** 加载笔记里的网络图片（http、https）；关掉后不发请求，图片服务器就不知道你打开了笔记 */
+  remote: boolean;
 }
 
 export const DEFAULT_IMAGE_TEMPLATE = './assets/{filename}-{yyyyMMdd-HHmmss}.png';
@@ -27,7 +29,21 @@ export const defaultImagePrefs: ImagePrefs = {
   upload: 'none',
   picgoUrl: DEFAULT_PICGO_URL,
   command: '',
+  remote: true,
 };
+
+/** 网络图片（http、https 开头，不分大小写） */
+export function isRemoteImage(src: string): boolean {
+  return /^https?:/i.test(src.trim());
+}
+
+/**
+ * 按"加载远程图片"设置处理图片地址：关掉时网络图片换成空地址，什么都不请求；
+ * 其他地址（本地、data:、blob:）原样返回。
+ */
+export function allowImage(src: string, prefs: Pick<ImagePrefs, 'remote'>): string {
+  return !prefs.remote && isRemoteImage(src) ? '' : src;
+}
 
 /** 导出 */
 export interface ExportPrefs {
@@ -53,6 +69,7 @@ export function sanitizeImagePrefs(raw: unknown): ImagePrefs {
     upload: oneOf(s.upload, ['none', 'picgo', 'command'] as const, d.upload),
     picgoUrl: str(s.picgoUrl, d.picgoUrl).trim() || d.picgoUrl,
     command: str(s.command, d.command),
+    remote: typeof s.remote === 'boolean' ? s.remote : d.remote,
   };
 }
 

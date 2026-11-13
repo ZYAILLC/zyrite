@@ -97,6 +97,8 @@ export class FromMdast {
       }
       case 'html':
         return this.raw(node, 'html', bid);
+      case 'footnoteDefinition':
+        return this.raw(node, 'footnote', bid);
       case 'yaml':
         return n.raw_block!.create({ bid, kind: 'yaml' }, node.value ? schema.text(node.value) : null);
       default:

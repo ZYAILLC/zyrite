@@ -33,6 +33,14 @@ describe('sanitizeSettings', () => {
     const s = sanitizeSettings({ themePref: { followSystem: true, theme: 'xuan', light: 'celadon', dark: 'ink' } });
     expect(s.themePref).toEqual({ followSystem: true, theme: 'frost', light: 'frost', dark: 'graphite' });
   });
+
+  it('旧版图片设置没有"加载远程图片"，默认打开；关掉的能保留', () => {
+    const old = sanitizeSettings({ image: { save: 'none', template: './img/{filename}.png', upload: 'none' } });
+    expect(old.image.remote).toBe(true);
+    expect(old.image.save).toBe('none');
+    expect(sanitizeSettings({ image: { remote: false } }).image.remote).toBe(false);
+    expect(sanitizeSettings({ image: { remote: 'no' } }).image.remote).toBe(true);
+  });
 });
 
 describe('activeThemeId', () => {

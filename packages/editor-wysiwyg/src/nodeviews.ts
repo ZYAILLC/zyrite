@@ -13,7 +13,10 @@ import {
   type EditorLabels,
   findLanguage,
   renderMath,
+  renderEmbed,
+  renderMarkdown,
   renderMermaid,
+  type ResolveEmbed,
   type ResolveUrl,
 } from '@zyrite/editor-common';
 import { redo, undo } from 'prosemirror-history';
@@ -52,6 +55,8 @@ export class CodeView implements NodeView {
     private readonly view: EditorView,
     private readonly getPos: GetPos,
     private readonly labels: EditorLabels,
+    private readonly resolveUrl?: ResolveUrl,
+    private readonly onOpenLink?: (href: string, kind: 'url' | 'wikilink') => void,
   ) {
     this.dom = document.createElement('div');
     // md-fences / md-math-block 是 Typora 的类名，Typora 主题按它给代码块、公式块加样式
@@ -118,8 +123,13 @@ export class CodeView implements NodeView {
     return (
       n.type.name === 'math_block' ||
       (n.type.name === 'code_block' && n.attrs.lang === 'mermaid') ||
-      (n.type.name === 'raw_block' && n.attrs.kind === 'yaml')
+      (n.type.name === 'raw_block' && ['yaml', 'html', 'footnote'].includes(n.attrs.kind as string))
     );
+  }
+
+  /** HTML 块、脚注定义：渲染结果照常排版，不像公式、图那样居中并加上下细线 */
+  private plainPreview(): boolean {
+    return this.node.type.name === 'raw_block' && (this.node.attrs.kind === 'html' || this.node.attrs.kind === 'footnote');
   }
 
   private setEditing(on: boolean) {
@@ -156,21 +166,62 @@ export class CodeView implements NodeView {
       this.figure.setAttribute('role', 'img');
       this.figure.addEventListener('mousedown', (e) => {
         if (this.editing) return;
+        // HTML 块里的折叠标题、链接、播放器照常可用，不进入编辑
+        if ((e.target as HTMLElement).closest('summary, a, video, audio')) return;
         e.preventDefault();
         this.setEditing(true);
         this.cm.focus();
       });
+      this.figure.addEventListener('click', (e) => {
+        const a = (e.target as HTMLElement).closest('a');
+        if (!a) return;
+        e.preventDefault();
+        const href = a.getAttribute('href');
+        if (href && !href.startsWith('#')) this.onOpenLink?.(href, 'url');
+      });
     }
     this.figure.classList.toggle('editing', this.editing);
+    this.figure.classList.toggle('zy-figure-plain', this.plainPreview());
     if (this.figure.parentNode !== this.dom) this.dom.append(this.figure);
     const text = this.node.textContent;
-    const key = `${this.node.type.name}:${text}`;
+    const key = `${this.node.type.name}:${this.node.attrs.kind ?? ''}:${text}`;
     if (key !== this.rendered) {
       this.rendered = key;
       this.figure.setAttribute('aria-label', text);
       if (this.node.type.name === 'math_block') renderMath(this.figure, text, true);
+      else if (this.node.attrs.kind === 'html') this.renderHtmlBlock(text);
+      else if (this.node.attrs.kind === 'footnote') this.renderFootnote(text);
       else void renderMermaid(this.figure, text);
     }
+  }
+
+  /** HTML 块：和预览栏一样按 HTML 渲染；只有闭合标签之类、渲染出来什么都看不见时，显示一行淡色源码，方便点开编辑 */
+  private renderHtmlBlock(text: string) {
+    const fig = this.figure!;
+    void renderMarkdown(fig, text, this.resolveUrl);
+    const visible = fig.textContent?.trim() || fig.querySelector('img, video, audio, iframe, svg, hr, input');
+    if (!visible) {
+      const hint = document.createElement('code');
+      hint.className = 'zy-raw-hint';
+      hint.textContent = text.trim();
+      fig.replaceChildren(hint);
+    }
+  }
+
+  /** 脚注定义 `[^1]: 内容`：编号 + 渲染后的内容 */
+  private renderFootnote(text: string) {
+    const fig = this.figure!;
+    const m = /^\[\^([^\]]+)\]:[ \t]*/.exec(text);
+    const label = document.createElement('sup');
+    label.className = 'footnote-ref';
+    label.textContent = m?.[1] ?? '';
+    const body = document.createElement('div');
+    body.className = 'zy-footnote-body';
+    // 续行按 4 个空格（或 1 个制表符）缩进，去掉后当作普通 Markdown 渲染
+    const content = (m ? text.slice(m[0].length) : text).replace(/\n(?: {1,4}|\t)/g, '\n');
+    void renderMarkdown(body, content, this.resolveUrl);
+    fig.className = `${fig.className.replace(/\bzy-footnote\b/g, '').trim()} zy-footnote`;
+    fig.replaceChildren(label, body);
   }
 
   private async loadLanguage() {
@@ -325,6 +376,8 @@ export class InlineSourceView implements NodeView {
     private readonly view: EditorView,
     private readonly getPos: GetPos,
     private readonly onOpenLink?: (href: string, kind: 'url' | 'wikilink') => void,
+    private readonly resolveEmbed?: ResolveEmbed,
+    private readonly resolveUrl?: ResolveUrl,
   ) {
     this.dom = document.createElement(node.type.name === 'footnote_ref' ? 'sup' : 'span');
     this.render();
@@ -383,6 +436,11 @@ export class InlineSourceView implements NodeView {
         renderMath(el, a.value, false);
         break;
       case 'wikilink': {
+        // `![[图片]]`、`![[笔记]]`：显示嵌入的内容；解析不了时照常显示成链接
+        if (a.embed && renderEmbed(el, String(a.value), this.resolveEmbed)) {
+          el.title = `![[${a.value}]]`;
+          break;
+        }
         const [target, alias] = String(a.value).split('|');
         // missing 类来自 view.ts 的装饰（链接到不存在的笔记），重绘时保留
         const missing = el.classList.contains('missing');
@@ -400,9 +458,30 @@ export class InlineSourceView implements NodeView {
         el.textContent = `[${a.label}]`;
         break;
       default:
-        el.className = 'html-inline';
-        el.textContent = a.value;
+        this.renderHtml(String(a.value));
     }
+  }
+
+  /**
+   * 行内 HTML：`<br>` 换行、`<img>` 显示图片；成对的格式标签（`<span style>`、`<kbd>` 等）由 html-inline.ts 的装饰渲染，
+   * 标签本身平时隐藏（zy-html-tag），这里只显示源码。类名用 classList 增删，保留装饰加上的类。
+   */
+  private renderHtml(value: string) {
+    const el = this.dom;
+    el.classList.remove('html-br', 'html-img');
+    el.classList.add('html-inline');
+    if (/^<br\s*\/?>$/i.test(value.trim())) {
+      el.classList.add('html-br');
+      el.replaceChildren(document.createElement('br'));
+      return;
+    }
+    const img = /^<img\b[^>]*>$/i.test(value.trim()) ? parseImg(value, this.resolveUrl) : null;
+    if (img) {
+      el.classList.add('html-img');
+      el.replaceChildren(img);
+      return;
+    }
+    el.textContent = value;
   }
 
   selectNode() {
@@ -488,6 +567,23 @@ export class InlineSourceView implements NodeView {
   ignoreMutation(): boolean {
     return true;
   }
+}
+
+/** `<img src width height alt>` → img 元素（地址经 resolveUrl 转换）；不是图片标签时返回 null */
+export function parseImg(html: string, resolveUrl?: ResolveUrl): HTMLImageElement | null {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  const src = tpl.content.firstElementChild;
+  if (!(src instanceof HTMLImageElement)) return null;
+  const img = document.createElement('img');
+  const url = src.getAttribute('src') ?? '';
+  img.src = resolveUrl ? resolveUrl(url) : url;
+  img.alt = src.getAttribute('alt') ?? '';
+  for (const k of ['width', 'height', 'title'] as const) {
+    const v = src.getAttribute(k);
+    if (v) img.setAttribute(k, v);
+  }
+  return img;
 }
 
 /** 任务列表项：左侧可点击的复选框 */

@@ -1,7 +1,8 @@
 import { parseMarkdown, renderHtml } from '@zyrite/md-blocks';
 import type { Nodes, PhrasingContent, Table } from 'mdast';
+import { highlightCodeBlocks } from './highlight';
 import { renderMath, renderMermaid } from './render';
-import type { ResolveUrl } from './types';
+import type { ResolveEmbed, ResolveUrl } from './types';
 
 /** 行内 mdast → DOM（实时预览里渲染表格等块时用） */
 export function renderPhrasing(nodes: readonly PhrasingContent[], parent: HTMLElement, resolveUrl?: ResolveUrl) {
@@ -120,7 +121,7 @@ export function renderMarkdown(el: HTMLElement, markdown: string, resolveUrl?: R
     renderMath(out, code.textContent ?? '', display);
     host.replaceWith(out);
   }
-  const pending: Promise<void>[] = [];
+  const pending: Promise<void>[] = [highlightCodeBlocks(el)];
   for (const code of el.querySelectorAll<HTMLElement>('pre > code.language-mermaid')) {
     const fig = document.createElement('div');
     fig.className = 'zy-figure zy-mermaid';
@@ -128,4 +129,70 @@ export function renderMarkdown(el: HTMLElement, markdown: string, resolveUrl?: R
     code.parentElement?.replaceWith(fig);
   }
   return Promise.all(pending).then(() => undefined);
+}
+
+/**
+ * 渲染 `![[…]]` 嵌入：图片直接显示，笔记显示成一段缩进的正文（标题 + 内容）。
+ * 嵌入的笔记里再有嵌入时只显示成链接，不会无限套娃。返回 false 表示解析不了，调用方照常显示链接。
+ */
+export function renderEmbed(el: HTMLElement, value: string, resolve: ResolveEmbed | undefined): boolean {
+  const info = resolve?.(value);
+  if (!info) return false;
+  if (info.kind === 'image') {
+    const img = document.createElement('img');
+    img.src = info.src;
+    img.alt = info.alt;
+    if (info.width) img.width = info.width;
+    if (info.height) img.height = info.height;
+    el.className = 'zy-embed zy-embed-image';
+    el.replaceChildren(img);
+    return true;
+  }
+  el.className = 'zy-embed zy-embed-note';
+  const head = document.createElement('span');
+  head.className = 'zy-embed-title';
+  head.textContent = info.title;
+  const body = document.createElement('span');
+  body.className = 'zy-embed-body';
+  el.replaceChildren(head, body);
+  void info
+    .load()
+    .then((md) => renderMarkdown(body, md, info.resolveUrl))
+    .catch((e: unknown) => {
+      body.textContent = e instanceof Error ? e.message : String(e);
+      body.classList.add('zy-embed-error');
+    });
+  return true;
+}
+
+/**
+ * 从笔记全文里取出要嵌入的部分：去掉 frontmatter；带 `#标题` 时只取这一节（到下一个同级或更高级标题为止）。
+ * 找不到标题时返回全文。
+ */
+export function embedSection(markdown: string, heading: string | null): string {
+  let text = markdown.replace(/^﻿?---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/, '');
+  if (!heading) return text;
+  const want = heading.trim().toLowerCase();
+  const lines = text.split(/\r?\n/);
+  let start = -1;
+  let level = 0;
+  let fence = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    if (/^ {0,3}(`{3,}|~{3,})/.test(line)) fence = !fence;
+    if (fence) continue;
+    const m = /^ {0,3}(#{1,6})[ \t]+(.*?)[ \t#]*$/.exec(line);
+    if (!m) continue;
+    const lv = m[1]!.length;
+    if (start < 0) {
+      if (m[2]!.trim().toLowerCase() === want) {
+        start = i;
+        level = lv;
+      }
+    } else if (lv <= level) {
+      text = lines.slice(start, i).join('\n');
+      return text;
+    }
+  }
+  return start < 0 ? text : lines.slice(start).join('\n');
 }

@@ -8,7 +8,7 @@ import { bindingFromEvent, type CommandId, defaultKeymap, formatBinding } from '
 import { isMac } from '../lib/platform';
 import { DEFAULT_IMAGE_TEMPLATE, DEFAULT_PICGO_URL, effectiveKeymap, type ExportPrefs, type ImagePrefs } from '../lib/prefs';
 import { useApp } from '../store';
-import { Choice, Row } from './Settings';
+import { Check, Choice, Row } from './Settings';
 
 /** 设置 › 图片 */
 export function ImageSettings() {
@@ -102,6 +102,9 @@ export function ImageSettings() {
             {status && <span className={status.error ? 'status-error' : 'muted'}>{status.text}</span>}
           </div>
         )}
+      </Row>
+      <Row label={t.imageRemote} hint={t.imageRemoteHint}>
+        <Check checked={prefs.remote} label={t.imageRemoteLoad} onChange={(remote) => set({ remote })} />
       </Row>
       <p className="settings-hint">{t.imageKeepFiles}</p>
     </>

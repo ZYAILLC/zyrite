@@ -5,6 +5,7 @@ import { type MouseEvent as ReactMouseEvent, useEffect, useRef } from 'react';
 import { t } from '../i18n';
 import { backend } from '../lib/backend';
 import { noteEdit, openLink } from '../lib/document';
+import { resolveEmbed } from '../lib/embeds';
 import { completeLinks, linkStatus, openWikiLink } from '../lib/linkIndex';
 import { activeEditor, setActiveEditor } from '../lib/editorRef';
 import { pasteFromSystem, pasteImages } from '../lib/images';
@@ -60,6 +61,7 @@ export function Editor() {
       resolveUrl: (src) => backend.resolveImage(src, useApp.getState().filePath),
       onOpenLink: (href, kind) => void (kind === 'wikilink' && useApp.getState().folder ? openWikiLink(href) : openLink(href, kind)),
       linkStatus,
+      resolveEmbed,
       completeLinks,
       onPasteFiles: pasteImages,
       onPasteEmpty: pasteFromSystem,

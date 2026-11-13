@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useApp } from '../store';
+import { webBackend } from './backend';
 import { deps, dropFiles } from './document';
 import { activeEditor } from './editorRef';
 import { fakeBackend, resetStore } from './fakeBackend.testutil';
@@ -57,5 +58,15 @@ describe('粘贴、拖入图片', () => {
     expect(lines[0]).toMatch(/^!\[外面\]\(assets\/a-\d{8}-\d{6}\.png\)$/);
     expect(lines[1]).toBe('![in](img/in.png)');
     expect(lines[2]).toBe('[doc.pdf](../tmp/doc.pdf)');
+  });
+});
+
+describe('网络图片按设置加载', () => {
+  it('打开时原样返回，关掉时返回空地址', () => {
+    const url = 'https://example.com/a.png';
+    expect(webBackend.resolveImage(url, '/v/a.md')).toBe(url);
+    useApp.setState({ image: { ...useApp.getState().image, remote: false } });
+    expect(webBackend.resolveImage(url, '/v/a.md')).toBe('');
+    expect(webBackend.resolveImage('data:image/png;base64,AAAA', '/v/a.md')).toBe('data:image/png;base64,AAAA');
   });
 });

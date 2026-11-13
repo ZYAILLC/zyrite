@@ -159,3 +159,13 @@ export function completeLinks(query: string): { label: string; detail?: string; 
   }
   return fuzzyFilter(query, candidates, (c) => c.label, 20).map(({ item }) => strip(item));
 }
+
+/** 双链目标对应的笔记绝对路径（嵌入 `![[笔记]]` 用）；没打开库或找不到时返回 null */
+export function notePath(target: string): string | null {
+  const { folder, filePath } = useApp.getState();
+  const r = getResolver();
+  if (!folder || !r) return null;
+  const from = filePath ? (relInVault(filePath) ?? '') : '';
+  const status = r.resolveWiki(target, from);
+  return status.kind === 'note' ? resolvePath(folder, status.rel) : null;
+}

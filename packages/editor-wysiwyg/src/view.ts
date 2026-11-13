@@ -37,6 +37,7 @@ import {
 import { annotationKey, annotationPlugin, flatten } from './annotate';
 import { autoPair, buildInputRules, buildKeymaps, calloutType } from './rules';
 import { schema } from './schema';
+import { htmlInline } from './html-inline';
 import { BlockSerializer } from './serializer';
 
 export type WysiwygOptions = EditorOptions;
@@ -139,23 +140,30 @@ const linksKey = new PluginKey<DecorationSet>('zy-links');
 
 /** 链接到不存在的笔记的双链加上 missing 类（虚线），库里的笔记变了时重新判断 */
 function missingLinks(linkStatus: EditorOptions['linkStatus']): Plugin<DecorationSet> {
+  // 库里的文件变了（refreshLinks）时加一，嵌入（`![[…]]`）的装饰跟着变，节点视图会重新解析、重画
+  let version = 0;
   const build = (doc: PMNode) => {
     const decos: Decoration[] = [];
-    if (linkStatus) {
-      doc.descendants((node, pos) => {
-        if (node.type !== schema.nodes.wikilink) return true;
-        const target = (String(node.attrs.value).split(/[|#]/)[0] ?? '').trim();
-        if (linkStatus(target) === 'missing') decos.push(Decoration.node(pos, pos + node.nodeSize, { class: 'missing' }));
+    doc.descendants((node, pos) => {
+      if (node.type !== schema.nodes.wikilink) return true;
+      if (node.attrs.embed) {
+        decos.push(Decoration.node(pos, pos + node.nodeSize, { 'data-embed-version': String(version) }));
         return false;
-      });
-    }
+      }
+      const target = (String(node.attrs.value).split(/[|#]/)[0] ?? '').trim();
+      if (linkStatus?.(target) === 'missing') decos.push(Decoration.node(pos, pos + node.nodeSize, { class: 'missing' }));
+      return false;
+    });
     return DecorationSet.create(doc, decos);
   };
   return new Plugin<DecorationSet>({
     key: linksKey,
     state: {
       init: (_, state) => build(state.doc),
-      apply: (tr, value) => (tr.docChanged || tr.getMeta(linksKey) ? build(tr.doc) : value),
+      apply: (tr, value) => {
+        if (tr.getMeta(linksKey)) version++;
+        return tr.docChanged || tr.getMeta(linksKey) ? build(tr.doc) : value;
+      },
     },
     props: { decorations: (state) => linksKey.getState(state) },
   });
@@ -285,6 +293,7 @@ export function createWysiwygEditor(opts: WysiwygOptions): EditorHandle {
           pasteHandling(opts.onPasteFiles, opts.onPasteEmpty),
           links(opts.onOpenLink),
           missingLinks(opts.linkStatus),
+          htmlInline(),
           annotationPlugin(),
         ],
       }),
@@ -292,11 +301,11 @@ export function createWysiwygEditor(opts: WysiwygOptions): EditorHandle {
       nodeViews: {
         code_block: (node, v, getPos) => new CodeView(node, v, getPos, labels),
         math_block: (node, v, getPos) => new CodeView(node, v, getPos, labels),
-        raw_block: (node, v, getPos) => new CodeView(node, v, getPos, labels),
+        raw_block: (node, v, getPos) => new CodeView(node, v, getPos, labels, opts.resolveUrl, opts.onOpenLink),
         inline_math: (node, v, getPos) => new InlineSourceView(node, v, getPos, opts.onOpenLink),
-        wikilink: (node, v, getPos) => new InlineSourceView(node, v, getPos, opts.onOpenLink),
+        wikilink: (node, v, getPos) => new InlineSourceView(node, v, getPos, opts.onOpenLink, opts.resolveEmbed, opts.resolveUrl),
         tag: (node, v, getPos) => new InlineSourceView(node, v, getPos, opts.onOpenLink),
-        html_inline: (node, v, getPos) => new InlineSourceView(node, v, getPos, opts.onOpenLink),
+        html_inline: (node, v, getPos) => new InlineSourceView(node, v, getPos, opts.onOpenLink, undefined, opts.resolveUrl),
         footnote_ref: (node, v, getPos) => new InlineSourceView(node, v, getPos, opts.onOpenLink),
         list_item: (node, v, getPos) => new ListItemView(node, v, getPos),
         image: (node) => new ImageView(node, opts.resolveUrl),

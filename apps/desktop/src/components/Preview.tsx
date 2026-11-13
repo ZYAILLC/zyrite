@@ -1,8 +1,9 @@
-import { renderMath, renderMermaidSvg } from '@zyrite/editor-common';
+import { highlightCodeBlocks, renderEmbed, renderMath, renderMermaidSvg } from '@zyrite/editor-common';
 import { renderHtml } from '@zyrite/md-blocks';
 import { type MouseEvent as ReactMouseEvent, useEffect, useRef } from 'react';
 import { t } from '../i18n';
 import { backend } from '../lib/backend';
+import { resolveEmbed } from '../lib/embeds';
 import { openLink } from '../lib/document';
 import { activeEditor, onEditorReady } from '../lib/editorRef';
 import { openWikiLink } from '../lib/linkIndex';
@@ -48,6 +49,13 @@ function render(el: HTMLElement, markdown: string, filePath: string | null, isCu
     }
     replaceKeepLine(display ? (code.closest('pre') ?? code) : code, out);
   }
+  // `![[图片]]`、`![[笔记]]` 嵌入
+  for (const span of el.querySelectorAll<HTMLElement>('span.wikilink.embed')) {
+    const out = document.createElement('span');
+    if (renderEmbed(out, span.dataset.value ?? span.dataset.target ?? '', resolveEmbed)) span.replaceWith(out);
+  }
+  // 代码块语法高亮：有缓存的立即上色，其余加载语言后再上色
+  void highlightCodeBlocks(el, isCurrent);
   const todo: [HTMLElement, string][] = [];
   for (const code of el.querySelectorAll<HTMLElement>('pre > code.language-mermaid')) {
     const source = code.textContent ?? '';
@@ -85,6 +93,11 @@ export function Preview() {
   const text = useApp((s) => s.text);
   const filePath = useApp((s) => s.filePath);
   const typoraTheme = useApp((s) => s.typoraTheme);
+  // 关掉"加载远程图片"后要重新渲染，已经显示的网络图片才会去掉
+  const remoteImages = useApp((s) => s.image.remote);
+  // `![[…]]` 嵌入要等文件树和笔记名单加载好才能解析，加载后重新渲染
+  const tree = useApp((s) => s.tree);
+  const indexVersion = useApp((s) => s.indexVersion);
   const themeKey = useApp((s) => `${activeThemeId(s.themePref, s.systemDark)}:${s.typoraTheme ?? ''}`);
   const sync = useScrollSync(scroller, content);
 
@@ -103,7 +116,7 @@ export function Preview() {
     render(el, text, filePath, () => gen === generation.current, () => sync.fromSource());
     // 先按已经有的内容对齐一次，Mermaid 画完后再对齐一次
     sync.fromSource();
-  }, [text, filePath, themeKey, sync]);
+  }, [text, filePath, themeKey, remoteImages, tree, indexVersion, sync]);
 
   const onClick = (e: ReactMouseEvent) => {
     const a = (e.target as HTMLElement).closest('a');
