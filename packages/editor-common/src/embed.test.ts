@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { embedSection, renderEmbed } from './dom';
+import { embedSection, renderEmbed, renderTableSource } from './dom';
 
 const note = `---
 title: x
@@ -68,5 +68,13 @@ describe('renderEmbed', () => {
     await new Promise((r) => setTimeout(r, 0));
     await new Promise((r) => setTimeout(r, 0));
     expect(el.querySelector('.zy-embed-body strong')?.textContent).toBe('hi');
+  });
+});
+
+describe('renderTableSource', () => {
+  it('单元格里的表情、上标', () => {
+    const t = renderTableSource('| a |\n|---|\n| :zap: 10^8^ |\n');
+    const td = t?.querySelector('td');
+    expect(td?.innerHTML).toBe('<span class="emoji" title=":zap:">⚡</span> 10<sup>8</sup>');
   });
 });

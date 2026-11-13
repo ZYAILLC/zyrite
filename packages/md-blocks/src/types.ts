@@ -37,6 +37,8 @@ export interface ZyHints {
   raw?: string;
   /** 原文里这段文本是否位于行首（决定原样输出是否安全） */
   lineStart?: boolean;
+  /** 删除线写法：GFM 的单波浪线 `~x~` 或双波浪线 `~~x~~` */
+  strike?: '~' | '~~';
 }
 
 /** Obsidian 双链 `[[笔记#标题|别名]]`，embed 为 `![[...]]` */
@@ -59,6 +61,24 @@ export interface Tag extends Literal {
   value: string;
 }
 
+/** 表情短代码 `:rocket:`，value 是名字（不含冒号） */
+export interface Emoji extends Literal {
+  type: 'emoji';
+  value: string;
+}
+
+/** 上标 `^x^` */
+export interface Superscript extends Parent {
+  type: 'superscript';
+  children: PhrasingContent[];
+}
+
+/** 下标 `~x~`（解析选项 subscript 打开时） */
+export interface Subscript extends Parent {
+  type: 'subscript';
+  children: PhrasingContent[];
+}
+
 /** 原样输出的一段 Markdown 原文 */
 export interface ZyRaw extends Literal {
   type: 'zyRaw';
@@ -73,12 +93,18 @@ declare module 'mdast' {
     wikiLink: WikiLink;
     highlight: Highlight;
     tag: Tag;
+    emoji: Emoji;
+    superscript: Superscript;
+    subscript: Subscript;
     zyRaw: ZyRaw;
   }
   interface RootContentMap {
     wikiLink: WikiLink;
     highlight: Highlight;
     tag: Tag;
+    emoji: Emoji;
+    superscript: Superscript;
+    subscript: Subscript;
     zyRaw: ZyRaw;
   }
 }

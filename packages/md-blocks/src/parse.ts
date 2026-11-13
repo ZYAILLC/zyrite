@@ -4,12 +4,44 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
+import { emojiByName } from './emoji';
 import type { ZyHints } from './types';
 
-const processor = unified().use(remarkParse).use(remarkGfm).use(remarkMath).use(remarkFrontmatter, ['yaml']);
+/** 解析选项（全局）：改了以后已打开的文档要重新解析、渲染才生效 */
+export interface ParseOptions {
+  /**
+   * `~文字~` 表示下标（Pandoc / Typora 写法），默认关闭。
+   * 打开后 GFM 的单波浪线删除线 `~文字~` 不再生效，删除线只认 `~~文字~~`。
+   */
+  subscript: boolean;
+}
+
+let parseOptions: ParseOptions = { subscript: false };
+
+function buildProcessor(o: ParseOptions) {
+  return unified()
+    .use(remarkParse)
+    .use(remarkGfm, o.subscript ? { singleTilde: false } : {})
+    .use(remarkMath)
+    .use(remarkFrontmatter, ['yaml']);
+}
+
+let processor = buildProcessor(parseOptions);
+
+/** 修改解析选项，之后的 parseMarkdown / renderHtml / stringify 都按新选项 */
+export function setParseOptions(o: Partial<ParseOptions>) {
+  const next = { ...parseOptions, ...o };
+  if (next.subscript !== parseOptions.subscript) processor = buildProcessor(next);
+  parseOptions = next;
+}
+
+export function getParseOptions(): Readonly<ParseOptions> {
+  return parseOptions;
+}
 
 /**
- * 解析 Markdown：CommonMark + GFM + 数学 + YAML frontmatter + Obsidian 行内语法（双链、高亮、标签）。
+ * 解析 Markdown：CommonMark + GFM + 数学 + YAML frontmatter + Obsidian 行内语法（双链、高亮、标签），
+ * 以及表情短代码 `:rocket:`、上标 `^x^`、下标 `~x~`（需打开 subscript 选项）。
  * 每个节点带源码位置，并在 `data.zy` 上记录原文风格。
  */
 export function parseMarkdown(source: string): Root {
@@ -130,15 +162,25 @@ function annotate(node: Nodes, source: string, inContainer: boolean) {
       });
       break;
     }
+    case 'delete':
+      hint(node, { strike: raw.startsWith('~~') ? '~~' : '~' });
+      break;
     case 'link':
       hint(node, { linkKind: raw.startsWith('<') ? 'autolink' : raw.startsWith('[') ? 'inline' : 'literal' });
       break;
   }
 }
 
-// ---------- Obsidian 行内语法 & 数学校正 ----------
+// ---------- Obsidian 行内语法、表情、上下标 & 数学校正 ----------
 
-const OBSIDIAN = /(!?)\[\[([^\[\]\n]+?)\]\]|==(?=\S)([^=\n]*?\S)==|(?<![^\s(（，。；：、])#([\p{L}\p{N}_/-]*[\p{L}_/-][\p{L}\p{N}_/-]*)/gu;
+/**
+ * 1-2 双链，3 高亮，4 标签，
+ * 5 表情短代码：冒号外侧不能紧挨字母数字（`12:30:45`、`a:b:` 不算），名字要在 gemoji 里，
+ * 6 上标 `^x^`：内容不能有空白（Pandoc 规则），`[^1]` 这类脚注写法不算，
+ * 7 下标 `~x~`：同上，只在 subscript 选项打开时生效。
+ */
+const INLINE =
+  /(!?)\[\[([^\[\]\n]+?)\]\]|==(?=\S)([^=\n]*?\S)==|(?<![^\s(（，。；：、])#([\p{L}\p{N}_/-]*[\p{L}_/-][\p{L}\p{N}_/-]*)|(?<![\p{L}\p{N}]):([a-z0-9_+-]+):(?![\p{L}\p{N}])|(?<!\[)\^([^\s^]+)\^|(?<!~)~([^\s~]+)~(?!~)/gu;
 
 function rewriteInline(parent: Parent, source: string) {
   const out: Nodes[] = [];
@@ -167,9 +209,8 @@ function rewriteInline(parent: Parent, source: string) {
 
 function splitObsidian(node: Text, source: string): PhrasingContent[] | undefined {
   const { value } = node;
-  OBSIDIAN.lastIndex = 0;
-  if (!OBSIDIAN.test(value)) return undefined;
-  OBSIDIAN.lastIndex = 0;
+  INLINE.lastIndex = 0;
+  if (!INLINE.test(value)) return undefined;
 
   // 文本与源码完全一致（没有转义、实体）时才能给新节点算出准确位置
   const start = node.position?.start.offset;
@@ -183,22 +224,45 @@ function splitObsidian(node: Text, source: string): PhrasingContent[] | undefine
           },
         }
       : {};
+  // 原文里转义过的符号（`\^`、`\~`、`\:`）不当作上下标、表情的标记
+  const raw = exact ? '' : (slice(node, source) ?? '');
+  const escaped = (ch: string) => raw.includes(`\\${ch}`);
+  const subscript = parseOptions.subscript && !escaped('~');
 
   const result: PhrasingContent[] = [];
   let last = 0;
-  for (const m of value.matchAll(OBSIDIAN)) {
+  INLINE.lastIndex = 0;
+  for (let m = INLINE.exec(value); m; m = INLINE.exec(value)) {
     const i = m.index;
-    if (i > last) result.push({ type: 'text', value: value.slice(last, i), ...pos(last, i) });
     const end = i + m[0].length;
+    let out: PhrasingContent | undefined;
     if (m[2] !== undefined) {
-      result.push({ type: 'wikiLink', value: m[2], embed: m[1] === '!', ...pos(i, end) });
+      out = { type: 'wikiLink', value: m[2], embed: m[1] === '!', ...pos(i, end) };
     } else if (m[3] !== undefined) {
-      result.push({ type: 'highlight', children: [{ type: 'text', value: m[3] }], ...pos(i, end) });
+      out = { type: 'highlight', children: [{ type: 'text', value: m[3] }], ...pos(i, end) };
     } else if (m[4] !== undefined) {
-      result.push({ type: 'tag', value: m[4], ...pos(i, end) });
+      out = { type: 'tag', value: m[4], ...pos(i, end) };
+    } else if (m[5] !== undefined) {
+      if (emojiByName(m[5]) !== undefined && !escaped(':')) out = { type: 'emoji', value: m[5], ...pos(i, end) };
+    } else if (m[6] !== undefined) {
+      if (!escaped('^')) {
+        out = { type: 'superscript', children: [{ type: 'text', value: m[6], ...pos(i + 1, end - 1) }], ...pos(i, end) };
+      }
+    } else if (m[7] !== undefined) {
+      if (subscript) {
+        out = { type: 'subscript', children: [{ type: 'text', value: m[7], ...pos(i + 1, end - 1) }], ...pos(i, end) };
+      }
     }
+    if (!out) {
+      // 不认识的表情名、没开下标：这一处当普通文字，从下一个字符接着找
+      INLINE.lastIndex = i + 1;
+      continue;
+    }
+    if (i > last) result.push({ type: 'text', value: value.slice(last, i), ...pos(last, i) });
+    result.push(out);
     last = end;
   }
+  if (!result.length) return undefined;
   if (last < value.length) result.push({ type: 'text', value: value.slice(last), ...pos(last, value.length) });
   return result;
 }

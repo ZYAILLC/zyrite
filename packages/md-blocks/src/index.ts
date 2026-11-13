@@ -1,5 +1,7 @@
 export * from './types';
-export { parseMarkdown } from './parse';
+export { getParseOptions, parseMarkdown, setParseOptions } from './parse';
+export type { ParseOptions } from './parse';
+export { emojiByName } from './emoji';
 export { splitBlocks, blockIndexAt, detectStyle, outline, plainText } from './blocks';
 export type { SourceBlock, BlockDoc, OutlineItem } from './blocks';
 export { stringifyBlock, stringifyTree } from './stringify';

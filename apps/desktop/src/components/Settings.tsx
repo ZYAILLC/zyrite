@@ -143,6 +143,9 @@ function General() {
           ]}
         />
       </Row>
+      <Row label={t.markdownSyntax} hint={t.subscriptTildeHint}>
+        <Check checked={s.subscript} onChange={(v) => useApp.setState({ subscript: v })} label={t.subscriptTilde} />
+      </Row>
       <Row label={t.language} hint={t.languageReload}>
         <Choice
           value={s.language}

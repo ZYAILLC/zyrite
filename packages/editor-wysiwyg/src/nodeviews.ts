@@ -19,6 +19,7 @@ import {
   type ResolveEmbed,
   type ResolveUrl,
 } from '@zyrite/editor-common';
+import { emojiByName } from '@zyrite/md-blocks';
 import { redo, undo } from 'prosemirror-history';
 import type { Node as PMNode } from 'prosemirror-model';
 import { Selection, TextSelection } from 'prosemirror-state';
@@ -365,7 +366,7 @@ export class CodeView implements NodeView {
 }
 
 /**
- * 行内的公式、双链、标签、HTML、脚注引用：平时显示渲染结果，选中（点击或方向键移入）时变成一个输入框编辑源码。
+ * 行内的公式、双链、标签、表情、HTML、脚注引用：平时显示渲染结果，选中（点击或方向键移入）时变成一个输入框编辑源码。
  */
 export class InlineSourceView implements NodeView {
   dom: HTMLElement;
@@ -398,6 +399,8 @@ export class InlineSourceView implements NodeView {
         return `${a.embed ? '!' : ''}[[${a.value}]]`;
       case 'tag':
         return `#${a.value}`;
+      case 'emoji':
+        return `:${a.value}:`;
       case 'inline_math':
         return `$${a.value}$`;
       case 'footnote_ref':
@@ -416,6 +419,10 @@ export class InlineSourceView implements NodeView {
       }
       case 'tag':
         return t ? { value: t.replace(/^#/, '') } : null;
+      case 'emoji': {
+        const name = t.replace(/^:|:$/g, '');
+        return name ? { value: name } : null;
+      }
       case 'inline_math':
         return t ? { value: t.replace(/^\$|\$$/g, '') } : null;
       case 'footnote_ref':
@@ -453,6 +460,14 @@ export class InlineSourceView implements NodeView {
         el.className = 'tag';
         el.textContent = `#${a.value}`;
         break;
+      case 'emoji': {
+        // 不认识的名字（改成了别的）显示短代码原文
+        const char = emojiByName(String(a.value));
+        el.className = char ? 'emoji' : 'emoji unknown';
+        el.textContent = char ?? `:${a.value}:`;
+        el.title = `:${a.value}:`;
+        break;
+      }
       case 'footnote_ref':
         el.className = 'footnote-ref';
         el.textContent = `[${a.label}]`;

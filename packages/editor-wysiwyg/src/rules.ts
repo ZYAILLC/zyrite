@@ -7,6 +7,7 @@ import {
   setBlockType,
   toggleMark,
 } from 'prosemirror-commands';
+import { emojiByName, getParseOptions } from '@zyrite/md-blocks';
 import { redo, undo } from 'prosemirror-history';
 import {
   InputRule,
@@ -33,13 +34,18 @@ function delimited(d: string): RegExp {
   return new RegExp(`(?:^|[^${c}])(${e}([^\\s${c}](?:[^${c}\\n]*[^\\s${c}])?)${e})$`);
 }
 
-function inlineMarkRule(d: string, type: MarkType): InputRule {
-  const re = delimited(d);
+/** `^x^` 上标、`~x~` 下标：内容不能有空白（Pandoc 规则），`[^` 是脚注写法，不算 */
+function tight(d: '^' | '~'): RegExp {
+  const e = d === '^' ? '\\^' : d;
+  return new RegExp(`(?:^|[^${e}\\[])(${e}([^\\s${e}]+)${e})$`);
+}
+
+function inlineMarkRule(d: string, type: MarkType, re = delimited(d), enabled = () => true): InputRule {
   // 注意：触发规则的最后一个字符还没插入文档，[start, end) 只覆盖已有的部分
   return new InputRule(re, (state, match, start, end) => {
     const whole = match[1];
     const text = match[2];
-    if (!whole || !text) return null;
+    if (!whole || !text || !enabled()) return null;
     const from = start + match[0].length - whole.length;
     const tr = state.tr.replaceWith(from, end, schema.text(text, [type.create(), ...state.doc.resolve(from).marks()]));
     tr.removeStoredMark(type);
@@ -83,7 +89,19 @@ export function buildInputRules(): Plugin {
       inlineMarkRule('_', m.em!),
       inlineMarkRule('~~', m.strike!),
       inlineMarkRule('==', m.highlight!),
+      inlineMarkRule('^', m.superscript!, tight('^')),
+      // 下标只在设置里打开时生效，否则 `~x~` 是删除线
+      inlineMarkRule('~', m.subscript!, tight('~'), () => getParseOptions().subscript),
       inlineMarkRule('`', m.code!),
+      // `:rocket:` → 表情；只认 gemoji 里有的名字，冒号前不能紧挨字母数字（`12:30:` 不算）
+      new InputRule(/(?:^|[^\p{L}\p{N}])(:([a-z0-9_+-]+):)$/u, (state, match, start, end) => {
+        const whole = match[1]!;
+        const from = start + match[0].length - whole.length;
+        if (emojiByName(match[2]!) === undefined || state.doc.resolve(from).marks().some((mk) => mk.type === m.code)) {
+          return null;
+        }
+        return state.tr.replaceWith(from, end, n.emoji!.create({ value: match[2] }));
+      }),
       inlineNodeRule(/(?:^|[^$\\])(\$([^\s$](?:[^$\n]*[^\s$])?)\$)$/, n.inline_math!, (mm) => ({ value: mm[2] })),
       inlineNodeRule(/(!?\[\[([^[\]\n]+)\]\])$/, n.wikilink!, (mm) => ({ value: mm[2], embed: mm[1]!.startsWith('!') })),
       inlineNodeRule(

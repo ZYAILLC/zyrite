@@ -278,6 +278,9 @@ importers:
       '@types/unist':
         specifier: ^3.0.3
         version: 3.0.3
+      gemoji:
+        specifier: 8.1.0
+        version: 8.1.0
       hast-util-from-html:
         specifier: ^2.0.3
         version: 2.0.3
@@ -1346,6 +1349,9 @@ packages:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
+
+  gemoji@8.1.0:
+    resolution: {integrity: sha512-HA4Gx59dw2+tn+UAa7XEV4ufUKI4fH1KgcbenVA9YKSj1QJTT0xh5Mwv5HMFNN3l2OtUe3ZIfuRwSyZS5pLIWw==}
 
   hachure-fill@0.5.2:
     resolution: {integrity: sha512-3GKBOn+m2LX9iq+JC1064cSFprJY4jL1jCXTcpnfER5HYE2l/4EfWSGzkPa/ZDBmYI0ZOEj5VHV/eKnPGkHuOg==}
@@ -3156,6 +3162,8 @@ snapshots:
 
   fsevents@2.3.3:
     optional: true
+
+  gemoji@8.1.0: {}
 
   hachure-fill@0.5.2: {}
 

@@ -128,10 +128,16 @@ export class FromMdast {
           );
           break;
         case 'delete':
-          out.push(...this.inline(c.children, m.strike!.create().addToSet(marks)));
+          out.push(...this.inline(c.children, m.strike!.create({ marker: c.data?.zy?.strike ?? null }).addToSet(marks)));
           break;
         case 'highlight':
           out.push(...this.inline(c.children, m.highlight!.create().addToSet(marks)));
+          break;
+        case 'superscript':
+          out.push(...this.inline(c.children, m.superscript!.create().addToSet(marks)));
+          break;
+        case 'subscript':
+          out.push(...this.inline(c.children, m.subscript!.create().addToSet(marks)));
           break;
         case 'inlineCode':
           if (c.value) out.push(schema.text(c.value, withSrc(c.value, c.data?.zy, m.code!.create().addToSet(marks))));
@@ -192,6 +198,9 @@ export class FromMdast {
           break;
         case 'tag':
           out.push(n.tag!.create({ value: c.value }, null, marks));
+          break;
+        case 'emoji':
+          out.push(n.emoji!.create({ value: c.value }, null, marks));
           break;
         case 'footnoteReference':
           out.push(n.footnote_ref!.create({ label: c.label ?? c.identifier }, null, marks));

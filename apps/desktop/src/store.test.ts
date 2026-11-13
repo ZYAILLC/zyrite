@@ -41,6 +41,12 @@ describe('sanitizeSettings', () => {
     expect(sanitizeSettings({ image: { remote: false } }).image.remote).toBe(false);
     expect(sanitizeSettings({ image: { remote: 'no' } }).image.remote).toBe(true);
   });
+
+  it('下标写法默认关闭，打开的能保留', () => {
+    expect(sanitizeSettings({}).subscript).toBe(false);
+    expect(sanitizeSettings({ subscript: true }).subscript).toBe(true);
+    expect(sanitizeSettings({ subscript: 'yes' }).subscript).toBe(false);
+  });
 });
 
 describe('activeThemeId', () => {

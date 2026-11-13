@@ -1,4 +1,4 @@
-import { parseMarkdown, renderHtml } from '@zyrite/md-blocks';
+import { emojiByName, parseMarkdown, renderHtml } from '@zyrite/md-blocks';
 import type { Nodes, PhrasingContent, Table } from 'mdast';
 import { highlightCodeBlocks } from './highlight';
 import { renderMath, renderMermaid } from './render';
@@ -32,6 +32,10 @@ function phrasing(n: PhrasingContent, resolveUrl?: ResolveUrl): Node {
       return wrap('del');
     case 'highlight':
       return wrap('mark');
+    case 'superscript':
+      return wrap('sup');
+    case 'subscript':
+      return wrap('sub');
     case 'inlineCode': {
       const c = el('code');
       c.textContent = n.value;
@@ -63,6 +67,14 @@ function phrasing(n: PhrasingContent, resolveUrl?: ResolveUrl): Node {
     case 'tag': {
       const s = el('span', 'tag');
       s.textContent = `#${n.value}`;
+      return s;
+    }
+    case 'emoji': {
+      const char = emojiByName(n.value);
+      if (!char) return document.createTextNode(`:${n.value}:`);
+      const s = el('span', 'emoji');
+      s.textContent = char;
+      s.title = `:${n.value}:`;
       return s;
     }
     case 'break':

@@ -11,9 +11,13 @@ import {
   type Options,
   type State,
 } from 'mdast-util-to-markdown';
-import type { Highlight, MdStyle, Tag, WikiLink } from './types';
+import { getParseOptions } from './parse';
+import type { Emoji, Highlight, MdStyle, Subscript, Superscript, Tag, WikiLink } from './types';
 
 type Opt = Partial<Options>;
+
+/** GFM 自带的删除线处理器（输出 `~~x~~`） */
+const gfmDelete = gfmToMarkdown().extensions!.find((e) => e.handlers?.delete)!.handlers!.delete as Handle;
 
 /** 临时改 state.options，执行完恢复，用来让单个节点沿用它自己的原文风格 */
 function withOptions<T>(state: State, opts: Opt, fn: () => T): T {
@@ -198,6 +202,18 @@ const handlers: Partial<Handlers> = {
   tag: ((node: Tag) => `#${node.value}`) as unknown as Handle,
   highlight: ((node: Highlight, _p: Parents | undefined, state: State, info: Info) =>
     `==${state.containerPhrasing(node as never, { ...info, before: '=', after: '=' })}==`) as unknown as Handle,
+  emoji: ((node: Emoji) => `:${node.value}:`) as unknown as Handle,
+  superscript: ((node: Superscript, _p: Parents | undefined, state: State, info: Info) =>
+    `^${state.containerPhrasing(node as never, { ...info, before: '^', after: '^' })}^`) as unknown as Handle,
+  subscript: ((node: Subscript, _p: Parents | undefined, state: State, info: Info) =>
+    `~${state.containerPhrasing(node as never, { ...info, before: '~', after: '~' })}~`) as unknown as Handle,
+  // 删除线沿用原文的单 / 双波浪线；打开下标后单波浪线是下标，只能写成双波浪线
+  delete: ((node: Nodes, parent: Parents | undefined, state: State, info: Info) => {
+    const out = gfmDelete(node, parent, state, info);
+    return zy(node).strike === '~' && !getParseOptions().subscript && /^~~[^]*~~$/.test(out)
+      ? `~${out.slice(2, -2)}~`
+      : out;
+  }) as Handle,
 };
 
 function options(style: MdStyle, table?: { alignPipes?: boolean; cellPadding?: boolean }): Options {
