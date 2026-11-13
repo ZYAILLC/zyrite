@@ -19,6 +19,20 @@ afterEach(() => {
   for (const p of parents.splice(0)) p.remove();
 });
 
+describe('表情、上下标', () => {
+  it('表情显示成字符，上标用 <sup>；保存逐字节不变', () => {
+    const src = 'Go :rocket: x^2^ H~2~O\n';
+    const ed = mount(src);
+    const dom = parents[0]!;
+    const emoji = dom.querySelector('.emoji') as HTMLElement;
+    expect(emoji.textContent).toBe('🚀');
+    expect(emoji.title).toBe(':rocket:');
+    expect(dom.querySelector('sup')?.textContent).toBe('2');
+    expect(dom.querySelector('del')?.textContent).toBe('2');
+    expect(ed.getText()).toBe(src);
+  });
+});
+
 describe('insertMarkdown', () => {
   it('在光标处插入图片：保存出来是 Markdown，不是转义后的文字', () => {
     const ed = mount('# 标题\n\n第一段\n');

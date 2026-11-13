@@ -1,4 +1,5 @@
 import { type DOMOutputSpec, type MarkSpec, type NodeSpec, Schema } from 'prosemirror-model';
+import { emojiByName } from '@zyrite/md-blocks';
 import { tableNodes } from 'prosemirror-tables';
 
 /**
@@ -223,6 +224,25 @@ const nodes: Record<string, NodeSpec> = {
     toDOM: (node) => ['span', { class: 'tag' }, `#${node.attrs.value as string}`],
   },
 
+  /** 表情短代码 `:rocket:`，value 是名字（不含冒号） */
+  emoji: {
+    group: 'inline',
+    inline: true,
+    atom: true,
+    attrs: { value: { default: '' } },
+    parseDOM: [
+      {
+        tag: 'span.emoji[data-name]',
+        getAttrs: (dom) => ({ value: (dom as HTMLElement).getAttribute('data-name') }),
+      },
+    ],
+    toDOM: (node) => [
+      'span',
+      { class: 'emoji', 'data-name': node.attrs.value as string, title: `:${node.attrs.value as string}:` },
+      emojiByName(node.attrs.value as string) ?? `:${node.attrs.value as string}:`,
+    ],
+  },
+
   footnote_ref: {
     group: 'inline',
     inline: true,
@@ -278,12 +298,24 @@ const marks: Record<string, MarkSpec> = {
     toDOM: () => ['strong', 0],
   },
   strike: {
+    // marker：原文是单波浪线 `~x~` 还是双波浪线
+    attrs: { marker: { default: null } },
     parseDOM: [{ tag: 's' }, { tag: 'del' }, { tag: 'strike' }],
     toDOM: () => ['del', 0],
   },
   highlight: {
     parseDOM: [{ tag: 'mark' }],
     toDOM: () => ['mark', 0],
+  },
+  superscript: {
+    excludes: 'subscript',
+    parseDOM: [{ tag: 'sup' }],
+    toDOM: () => ['sup', 0],
+  },
+  subscript: {
+    excludes: 'superscript',
+    parseDOM: [{ tag: 'sub' }],
+    toDOM: () => ['sub', 0],
   },
   code: {
     code: true,

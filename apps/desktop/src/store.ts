@@ -1,3 +1,4 @@
+import { setParseOptions } from '@zyrite/md-blocks';
 import { migrateThemeId, nextThemeId, type ThemeId } from '@zyrite/themes';
 import { create } from 'zustand';
 import type { Annotation, McpAccess, NoteName, Stamp, TreeEntry } from './lib/backend';
@@ -65,6 +66,8 @@ interface Settings {
   lineWidth: number;
   /** 正文行高（倍数） */
   lineHeight: number;
+  /** `~文字~` 表示下标（代替 GFM 的单波浪线删除线），默认关闭 */
+  subscript: boolean;
   /** 图片、导出、快捷键 */
   image: ImagePrefs;
   exportPrefs: ExportPrefs;
@@ -209,6 +212,7 @@ export const defaultSettings: Settings = {
   fontSize: 16,
   lineWidth: 720,
   lineHeight: 1.8,
+  subscript: false,
   image: defaultImagePrefs,
   exportPrefs: defaultExportPrefs,
   keymap: {},
@@ -259,6 +263,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     fontSize: typeof s.fontSize === 'number' && s.fontSize >= 12 && s.fontSize <= 24 ? s.fontSize : d.fontSize,
     lineWidth: typeof s.lineWidth === 'number' && s.lineWidth >= 560 && s.lineWidth <= 1200 ? s.lineWidth : d.lineWidth,
     lineHeight: typeof s.lineHeight === 'number' && s.lineHeight >= 1.2 && s.lineHeight <= 2.4 ? s.lineHeight : d.lineHeight,
+    subscript: typeof s.subscript === 'boolean' ? s.subscript : d.subscript,
     image: sanitizeImagePrefs(s.image),
     exportPrefs: sanitizeExportPrefs(s.exportPrefs),
     keymap: sanitizeKeymap(s.keymap),
@@ -376,6 +381,7 @@ export const useApp = create<AppState>()(
         fontSize: s.fontSize,
         lineWidth: s.lineWidth,
         lineHeight: s.lineHeight,
+        subscript: s.subscript,
         image: s.image,
         exportPrefs: s.exportPrefs,
         keymap: s.keymap,
@@ -394,6 +400,12 @@ export const useApp = create<AppState>()(
     },
   ),
 );
+
+// 下标写法是 md-blocks 的全局解析选项：启动时和设置变化时同步过去，编辑器和预览随后按新选项重建（见 Editor、Preview）
+setParseOptions({ subscript: useApp.getState().subscript });
+useApp.subscribe((s, prev) => {
+  if (s.subscript !== prev.subscript) setParseOptions({ subscript: s.subscript });
+});
 
 /** 某个命令当前的快捷键（keymap 写法；用户去掉了就是空字符串） */
 export function bindingOf(id: CommandId): string {

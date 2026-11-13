@@ -536,7 +536,8 @@
 .ProseMirror-selectednode > .inline-math,
 .inline-math.ProseMirror-selectednode,
 .wikilink.ProseMirror-selectednode,
-.tag.ProseMirror-selectednode {
+.tag.ProseMirror-selectednode,
+.emoji.ProseMirror-selectednode {
   outline: 1px solid var(--z-accent);
   border-radius: 2px;
 }

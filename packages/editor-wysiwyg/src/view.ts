@@ -307,6 +307,7 @@ export function createWysiwygEditor(opts: WysiwygOptions): EditorHandle {
         inline_math: (node, v, getPos) => new InlineSourceView(node, v, getPos, opts.onOpenLink),
         wikilink: (node, v, getPos) => new InlineSourceView(node, v, getPos, opts.onOpenLink, opts.resolveEmbed, opts.resolveUrl),
         tag: (node, v, getPos) => new InlineSourceView(node, v, getPos, opts.onOpenLink),
+        emoji: (node, v, getPos) => new InlineSourceView(node, v, getPos),
         html_inline: (node, v, getPos) => new InlineSourceView(node, v, getPos, opts.onOpenLink, undefined, opts.resolveUrl),
         footnote_ref: (node, v, getPos) => new InlineSourceView(node, v, getPos, opts.onOpenLink),
         list_item: (node, v, getPos) => new ListItemView(node, v, getPos),

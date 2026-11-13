@@ -111,9 +111,13 @@ function markToMdast(mark: Mark): (PhrasingContent & Parent) | undefined {
     case 'strong':
       return { type: 'strong', children: [], ...hints({ marker: a.marker }) };
     case 'strike':
-      return { type: 'delete', children: [] };
+      return { type: 'delete', children: [], ...hints({ strike: a.marker }) };
     case 'highlight':
       return { type: 'highlight', children: [] };
+    case 'superscript':
+      return { type: 'superscript', children: [] };
+    case 'subscript':
+      return { type: 'subscript', children: [] };
     case 'link':
       if (a.ref) {
         return {
@@ -163,6 +167,8 @@ function leafToMdast(node: PMNode, lineStart: boolean): PhrasingContent | undefi
       return { type: 'wikiLink', value: a.value, embed: !!a.embed };
     case 'tag':
       return { type: 'tag', value: a.value };
+    case 'emoji':
+      return { type: 'emoji', value: a.value };
     case 'footnote_ref':
       return { type: 'footnoteReference', identifier: String(a.label).toLowerCase(), label: a.label };
     case 'html_inline':

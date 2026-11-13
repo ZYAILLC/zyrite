@@ -29,11 +29,14 @@ interface Carry {
  * - 换种类：取出全文和光标所在块，销毁旧编辑器，用同一份全文建新编辑器，
  *   光标放回同一块，滚动位置尽量保持。所见即所得做块级回写，切换本身不会改动原文。
  * - 换文档（打开、新建、还原，docId 变化）：用 store 里的新内容重建，光标和滚动回到开头。
+ * - 改了影响解析的设置（下标写法）：和换种类一样，用当前全文重建。
  */
 export function Editor() {
   const host = useRef<HTMLDivElement>(null);
   const kind = useApp(editorKind);
   const docId = useApp((s) => s.docId);
+  // 下标设置改变解析方式，要用新选项重建编辑器（解析选项已由 store 同步到 md-blocks）
+  const subscript = useApp((s) => s.subscript);
   const carry = useRef<Carry>({ docId, text: useApp.getState().text, scrollTop: 0 });
 
   useEffect(() => {
@@ -96,7 +99,7 @@ export function Editor() {
       handle.destroy();
       if (activeEditor.current === handle) activeEditor.current = null;
     };
-  }, [kind, docId]);
+  }, [kind, docId, subscript]);
 
   // 专注模式、打字机模式变化时直接作用到当前编辑器，不重建
   const focusMode = useApp((s) => s.focusMode);

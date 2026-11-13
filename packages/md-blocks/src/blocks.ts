@@ -1,4 +1,5 @@
 import type { Heading, Nodes, Root, RootContent } from 'mdast';
+import { emojiByName } from './emoji';
 import { parseMarkdown } from './parse';
 import { defaultStyle, type MdStyle } from './types';
 
@@ -107,6 +108,7 @@ export function plainText(node: Nodes): string {
     return alias ?? target ?? '';
   }
   if (node.type === 'tag') return `#${node.value}`;
+  if (node.type === 'emoji') return emojiByName(node.value) ?? `:${node.value}:`;
   if ('value' in node && typeof node.value === 'string') return node.value;
   if ('children' in node) return node.children.map((c) => plainText(c as Nodes)).join('');
   return '';

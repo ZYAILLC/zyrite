@@ -1,13 +1,27 @@
-import type { Element, ElementContent, Root as HastRoot } from 'hast';
+import type { Element, ElementContent, Root as HastRoot, Text } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 import type { Nodes } from 'mdast';
 import { type State, toHast } from 'mdast-util-to-hast';
+import { emojiByName } from './emoji';
 import { parseMarkdown } from './parse';
-import type { Highlight, Tag, WikiLink } from './types';
+import type { Emoji, Highlight, Subscript, Superscript, Tag, WikiLink } from './types';
+
+/** 上标、下标：子节点包进 `<sup>` / `<sub>` */
+function wrapIn(state: State, node: Superscript | Subscript, tagName: 'sup' | 'sub'): Element {
+  const el: Element = {
+    type: 'element',
+    tagName,
+    properties: {},
+    children: state.all(node as unknown as Nodes) as ElementContent[],
+  };
+  state.patch(node as unknown as Nodes, el);
+  return el;
+}
 
 /**
  * Markdown → HTML 字符串。审阅视图按块渲染、导出 HTML用。
- * - 双链渲染成 `<a class="wikilink" data-target>`，高亮 `<mark>`，标签 `<span class="tag">`
+ * - 双链渲染成 `<a class="wikilink" data-target>`，高亮 `<mark>`，标签 `<span class="tag">`，
+ *   表情 `<span class="emoji" title=":名字:">`，上标 `<sup>`，下标 `<sub>`
  * - 公式渲染成 `<code class="language-math math-inline|math-display">`、Mermaid 是 `<pre><code class="language-mermaid">`，
  *   由调用方在 DOM 里再用 KaTeX / Mermaid 渲染（见 editor-common 的 renderMarkdown）
  * - 原文里的 HTML 原样保留（Typora 也是这样）；应用的 CSP 禁止内联脚本，不会执行
@@ -64,6 +78,21 @@ export function renderHtml(
         state.patch(node as unknown as Nodes, el);
         return el;
       },
+      emoji(state: State, node: Emoji): Element | Text {
+        const char = emojiByName(node.value);
+        const source = `:${node.value}:`;
+        if (char === undefined) return { type: 'text', value: source };
+        const el: Element = {
+          type: 'element',
+          tagName: 'span',
+          properties: { className: ['emoji'], title: source },
+          children: [{ type: 'text', value: char }],
+        };
+        state.patch(node as unknown as Nodes, el);
+        return el;
+      },
+      superscript: (state: State, node: Superscript) => wrapIn(state, node, 'sup'),
+      subscript: (state: State, node: Subscript) => wrapIn(state, node, 'sub'),
       zyRaw(_state: State, node: { value: string }) {
         return { type: 'raw', value: node.value };
       },

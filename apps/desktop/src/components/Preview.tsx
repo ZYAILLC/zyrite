@@ -110,6 +110,8 @@ export function Preview() {
   const tree = useApp((s) => s.tree);
   const indexVersion = useApp((s) => s.indexVersion);
   const themeKey = useApp((s) => `${activeThemeId(s.themePref, s.systemDark)}:${s.typoraTheme ?? ''}`);
+  // 下标设置改变解析方式，改了要重新渲染
+  const subscript = useApp((s) => s.subscript);
   const sync = useScrollSync(scroller, content);
 
   // 换主题后 Mermaid 的配色跟着变，缓存作废
@@ -127,7 +129,7 @@ export function Preview() {
     render(el, text, filePath, () => gen === generation.current, () => sync.fromSource());
     // 先按已经有的内容对齐一次，Mermaid 画完后再对齐一次
     sync.fromSource();
-  }, [text, filePath, themeKey, remoteImages, tree, indexVersion, sync]);
+  }, [text, filePath, themeKey, remoteImages, tree, indexVersion, subscript, sync]);
 
   const onClick = (e: ReactMouseEvent) => {
     const a = (e.target as HTMLElement).closest('a');
