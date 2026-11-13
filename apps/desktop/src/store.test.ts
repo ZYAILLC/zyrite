@@ -22,6 +22,13 @@ describe('sanitizeSettings', () => {
     expect(s.themePref.dark).toBe('graphite');
   });
 
+  it('界面语言默认英文，跟随系统要用户自己选', () => {
+    expect(defaultSettings.language).toBe('en');
+    expect(sanitizeSettings({ language: 'system' }).language).toBe('system');
+    expect(sanitizeSettings({ language: 'zh-CN' }).language).toBe('zh-CN');
+    expect(sanitizeSettings({ language: 'fr' }).language).toBe('en');
+  });
+
   it('旧版主题换成新主题', () => {
     const s = sanitizeSettings({ themePref: { followSystem: true, theme: 'xuan', light: 'celadon', dark: 'ink' } });
     expect(s.themePref).toEqual({ followSystem: true, theme: 'frost', light: 'frost', dark: 'graphite' });

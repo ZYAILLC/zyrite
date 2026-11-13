@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { t } from '../i18n';
-import { complete, PRESETS, type ProviderConfig } from '../lib/ai';
+import { complete, PRESETS, type ProviderConfig, presetName, testPrompt } from '../lib/ai';
 import { deps } from '../lib/document';
 import { useApp } from '../store';
 import { Row } from './Settings';
@@ -44,7 +44,7 @@ function ProviderEditor({
   return (
     <Row label={label}>
       <div className="settings-inline">
-        <select className="settings-select" value={value ? (presets.some((p) => p.name === value.name) ? value.name : '') : ''} onChange={(e) => pick(e.target.value)}>
+        <select className="settings-select" value={value && presets.some((p) => p.name === presetName(value.name)) ? presetName(value.name) : ''} onChange={(e) => pick(e.target.value)}>
           <option value="">{value ? t.aiCustom : t.aiNotSet}</option>
           {presets.map((p) => (
             <option key={p.name} value={p.name}>
@@ -119,7 +119,7 @@ export function AiSettings() {
         value={ai.chat}
         presets={PRESETS}
         onChange={(chat) => set({ chat })}
-        test={(p) => complete(p, [{ role: 'user', content: '只回复 OK' }])}
+        test={(p) => complete(p, testPrompt())}
       />
     </>
   );

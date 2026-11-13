@@ -31,9 +31,10 @@ cargo clippy --workspace --all-targets -- -D warnings
 apps/desktop/            Tauri 应用：src/（React 前端）+ src-tauri/（Rust，只做组装）
 crates/zyrite-core/      核心库：文件读写（原子保存、外部修改检测）、库（文件树、监听、文件操作）、
                          链接和标签索引、全文搜索、恢复缓存、.zyrite/ 数据（基线、待审阅、批注）、向量索引
-crates/zyrite-mcp/       MCP server（stdio，`zyrite mcp --vault <路径>`）
+crates/zyrite-mcp/       MCP server（stdio，`zyrite mcp --vault <路径> [--lang en|zh-CN]`）
 crates/zyrite-ai/        内置 AI 的模型调用（OpenAI 兼容接口、Ollama；流式输出、向量）
 crates/zyrite-export/    Word（.docx）导出
+crates/zyrite-i18n/      后端文案的语言：默认英文，可选简体中文
 packages/md-blocks/      Markdown 解析、顶层块切分、源码位置、风格探测
 packages/editor-common/  两种编辑器共用的接口、渲染、正文排版
 packages/editor-live/    实时预览（CodeMirror 6）

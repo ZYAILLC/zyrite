@@ -164,5 +164,5 @@ async fn 错误() {
         .await
         .unwrap_err()
         .to_string()
-        .contains("连不上"));
+        .contains("Can't connect to"));
 }

@@ -6416,6 +6416,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
+ "zyrite-i18n",
 ]
 
 [[package]]
@@ -6434,6 +6435,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "trash",
+ "zyrite-i18n",
 ]
 
 [[package]]
@@ -6455,6 +6457,7 @@ dependencies = [
  "zyrite-ai",
  "zyrite-core",
  "zyrite-export",
+ "zyrite-i18n",
  "zyrite-mcp",
 ]
 
@@ -6468,7 +6471,12 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "zip 2.6.1",
+ "zyrite-i18n",
 ]
+
+[[package]]
+name = "zyrite-i18n"
+version = "0.1.0"
 
 [[package]]
 name = "zyrite-mcp"
@@ -6480,4 +6488,5 @@ dependencies = [
  "serde_json",
  "tempfile",
  "zyrite-core",
+ "zyrite-i18n",
 ]

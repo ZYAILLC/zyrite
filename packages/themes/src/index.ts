@@ -252,7 +252,7 @@ export function themeToCssVars(theme: Theme): Record<string, string> {
 /** WCAG 2.x 相对亮度 */
 export function relativeLuminance(hex: string): number {
   const m = /^#([0-9a-f]{6})$/i.exec(hex);
-  if (!m?.[1]) throw new Error(`不是 #RRGGBB 色值：${hex}`);
+  if (!m?.[1]) throw new Error(`Not a #RRGGBB color: ${hex}`);
   const n = parseInt(m[1], 16);
   const channel = (c: number) => {
     const s = c / 255;

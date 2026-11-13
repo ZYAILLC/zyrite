@@ -34,8 +34,8 @@
     "active": true,
     "targets": "all",
     "category": "Productivity",
-    "shortDescription": "Markdown 编辑器",
-    "longDescription": "Zyrite（纸砚）：开源、免费的 Markdown 编辑器，为 AI Agent 写的文档而生。",
+    "shortDescription": "Markdown editor",
+    "longDescription": "Zyrite: an open-source, free Markdown editor built for documents written by AI agents.",
     "copyright": "Copyright 2026 z-y.ai",
     "license": "Apache-2.0",
     "licenseFile": "../../../LICENSE",
@@ -51,7 +51,7 @@
       {
         "ext": ["md", "markdown", "mdown", "mkd", "mdx"],
         "name": "Markdown",
-        "description": "Markdown 文档",
+        "description": "Markdown document",
         "role": "Editor",
         "mimeType": "text/markdown",
         "rank": "Default"

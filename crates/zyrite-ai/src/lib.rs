@@ -31,12 +31,35 @@ pub struct Message {
 
 #[derive(Debug, thiserror::Error)]
 pub enum AiError {
-    #[error("连不上 {0}：{1}")]
+    #[error("{}", msg::connect(.0, .1))]
     Connect(String, String),
-    #[error("服务商返回错误（{status}）：{body}")]
+    #[error("{}", msg::status(*.status, .body))]
     Status { status: u16, body: String },
-    #[error("看不懂服务商的返回：{0}")]
+    #[error("{}", msg::parse(.0))]
     Parse(String),
+}
+
+/// 错误文案，按当前界面语言（见 zyrite-i18n）
+mod msg {
+    use zyrite_i18n::trf;
+
+    pub fn connect(url: &str, e: &str) -> String {
+        trf!("Can't connect to {url}: {e}", "连不上 {url}：{e}")
+    }
+
+    pub fn status(status: u16, body: &str) -> String {
+        trf!(
+            "The provider returned an error ({status}): {body}",
+            "服务商返回错误（{status}）：{body}"
+        )
+    }
+
+    pub fn parse(s: &str) -> String {
+        trf!(
+            "Couldn't understand the provider's response: {s}",
+            "看不懂服务商的返回：{s}"
+        )
+    }
 }
 
 impl Serialize for AiError {
@@ -236,7 +259,8 @@ pub async fn embed(
         }
     };
     if out.len() != inputs.len() || out.iter().any(Vec::is_empty) {
-        return Err(AiError::Parse(format!(
+        return Err(AiError::Parse(zyrite_i18n::trf!(
+            "Expected {} embeddings, got {}",
             "要 {} 个向量，收到 {} 个",
             inputs.len(),
             out.len()

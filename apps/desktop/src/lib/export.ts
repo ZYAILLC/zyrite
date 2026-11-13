@@ -125,7 +125,7 @@ export async function buildHtml(src: Source): Promise<string> {
   const body = await renderBody(src);
   const scope = useApp.getState().typoraTheme ? ' zy-typora' : '';
   return `<!doctype html>
-<html lang="${document.documentElement.lang || 'zh-CN'}">
+<html lang="${document.documentElement.lang || 'en'}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -288,7 +288,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('图片加载失败'));
+    img.onerror = () => reject(new Error(t.imageLoadFailed));
     img.src = src;
   });
 }
@@ -302,7 +302,7 @@ async function toPng(src: string, width?: number, height?: number, scale = 2): P
   canvas.width = Math.round(w * scale);
   canvas.height = Math.round(h * scale);
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('canvas 不可用');
+  if (!ctx) throw new Error(t.canvasUnavailable);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
   const url = canvas.toDataURL('image/png');
   return { png: url.slice(url.indexOf(',') + 1), width: w, height: h };
@@ -313,7 +313,7 @@ async function svgToPng(svg: string, exPx: number): Promise<DocImage> {
   const holder = document.createElement('div');
   holder.innerHTML = svg;
   const el = holder.querySelector('svg');
-  if (!el) throw new Error('不是 SVG');
+  if (!el) throw new Error(t.notSvg);
   const size = (attr: string, fallback: number) => {
     const v = el.getAttribute(attr) ?? '';
     const n = parseFloat(v);

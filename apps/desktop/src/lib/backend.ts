@@ -2,7 +2,7 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { ask, message, open, save } from '@tauri-apps/plugin-dialog';
 import { openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
-import { t } from '../i18n';
+import { type Locale, t } from '../i18n';
 import { dirname, isUrl, resolvePath } from './paths';
 import { isTauri } from './platform';
 import type { ImagePrefs } from './prefs';
@@ -281,6 +281,8 @@ export interface Backend {
   mcpCommand(): Promise<string>;
   /** macOS 应用菜单：菜单文字跟随界面语言；点"设置…"时回调 */
   menuLocalize(settings: string): Promise<void>;
+  /** 告诉 Rust 界面语言（报错文案用，也存下来给 MCP 服务用） */
+  setLocale(locale: Locale): Promise<void>;
   onOpenSettings(fn: () => void): Promise<() => void>;
   /** 系统让 app 打开一个文件（app 已经开着时，在 Finder 里双击 .md） */
   onOpenPath(fn: (path: string) => void): Promise<() => void>;
@@ -439,6 +441,7 @@ const tauriBackend: Backend = {
   vaultConfigSet: (config) => call('vault_config_set', { config }),
   mcpCommand: () => call('mcp_command'),
   menuLocalize: (settings) => call('menu_localize', { settings }),
+  setLocale: (locale) => call('set_locale', { locale }),
   onOpenSettings: (fn) => listen('zyrite://open-settings', () => fn()),
   onOpenPath: (fn) => listen<string>('zyrite://open-path', (e) => fn(e.payload)),
   mcpAccessList: () => call('mcp_access_list'),
@@ -738,6 +741,7 @@ export const webBackend: Backend = {
     return 'zyrite';
   },
   async menuLocalize() {},
+  async setLocale() {},
   async onOpenSettings() {
     return () => {};
   },
@@ -864,12 +868,12 @@ export const webBackend: Backend = {
     return to === from ? to : this.imageWrite(to, await this.readBase64(from));
   },
   async imageUpload(prefs, path) {
-    if (prefs.upload !== 'picgo') throw new Error('浏览器里只能用 PicGo 上传');
+    if (prefs.upload !== 'picgo') throw new Error(t.uploadPicgoOnly);
     const r = (await (await fetch(prefs.picgoUrl, { method: 'POST', body: JSON.stringify({ list: [path] }) })).json()) as {
       success: boolean;
       result?: string[];
     };
-    if (!r.success || !r.result?.[0]) throw new Error('上传失败');
+    if (!r.success || !r.result?.[0]) throw new Error(t.uploadFailed);
     return r.result[0];
   },
   async readBase64(path) {

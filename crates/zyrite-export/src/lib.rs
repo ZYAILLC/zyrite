@@ -15,10 +15,26 @@ use serde::Deserialize;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExportError {
-    #[error("图片数据无效：{0}")]
+    #[error("{}", msg::image(.0))]
     Image(String),
-    #[error("生成 Word 文件失败：{0}")]
+    #[error("{}", msg::pack(.0))]
     Pack(String),
+}
+
+/// 错误文案，按当前界面语言（见 zyrite-i18n）
+mod msg {
+    use zyrite_i18n::trf;
+
+    pub fn image(e: &str) -> String {
+        trf!("Invalid image data: {e}", "图片数据无效：{e}")
+    }
+
+    pub fn pack(e: &str) -> String {
+        trf!(
+            "Couldn't create the Word file: {e}",
+            "生成 Word 文件失败：{e}"
+        )
+    }
 }
 
 /// 整个文档
@@ -561,7 +577,9 @@ impl Builder {
             .decode(image.png.trim())
             .map_err(|e| ExportError::Image(e.to_string()))?;
         if !png.starts_with(&[0x89, b'P', b'N', b'G']) {
-            return Err(ExportError::Image("不是 PNG".into()));
+            return Err(ExportError::Image(
+                zyrite_i18n::tr("not a PNG", "不是 PNG").into(),
+            ));
         }
         let (mut w, mut h) = (image.width.max(1), image.height.max(1));
         if w > self.max_width_px {

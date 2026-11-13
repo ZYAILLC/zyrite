@@ -256,6 +256,7 @@ export function fakeBackend() {
     },
     mcpCommand: async () => '/opt/zyrite',
     menuLocalize: async () => {},
+    setLocale: async () => {},
     onOpenSettings: async () => () => {},
     onOpenPath: async () => () => {},
     mcpAccessList: async () => structuredClone(state.access),

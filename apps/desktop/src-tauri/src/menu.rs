@@ -38,3 +38,13 @@ pub fn menu_localize(app: AppHandle, settings: String) {
         let _ = item.0.set_text(settings);
     }
 }
+
+/// 后端文案（错误信息等）跟随界面语言；同时记下来，给不带界面运行的 `zyrite mcp` 用
+#[tauri::command]
+pub fn set_locale(locale: String) {
+    let locale = zyrite_i18n::Locale::parse(&locale).unwrap_or(zyrite_i18n::Locale::En);
+    zyrite_i18n::set_locale(locale);
+    if zyrite_i18n::load_saved_locale() != Some(locale) {
+        let _ = zyrite_i18n::save_locale(locale);
+    }
+}

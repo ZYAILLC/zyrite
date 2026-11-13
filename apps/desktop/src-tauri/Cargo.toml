@@ -29,6 +29,7 @@ tauri-plugin-opener = "2"
 zyrite-ai = { path = "../../../crates/zyrite-ai" }
 zyrite-core = { path = "../../../crates/zyrite-core" }
 zyrite-export = { path = "../../../crates/zyrite-export" }
+zyrite-i18n = { path = "../../../crates/zyrite-i18n" }
 zyrite-mcp = { path = "../../../crates/zyrite-mcp" }
 
 [dev-dependencies]

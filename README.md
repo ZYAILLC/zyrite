@@ -32,9 +32,10 @@ apps/desktop/            Tauri app: src/ (React frontend) + src-tauri/ (Rust, wi
 crates/zyrite-core/      Core library: file I/O (atomic save, external change detection), vault (file tree,
                          watching, file operations), link and tag index, full-text search, recovery cache,
                          .zyrite/ data (baselines, pending reviews, annotations), vector index
-crates/zyrite-mcp/       MCP server (stdio, `zyrite mcp --vault <path>`)
+crates/zyrite-mcp/       MCP server (stdio, `zyrite mcp --vault <path> [--lang en|zh-CN]`)
 crates/zyrite-ai/        Model calls for the built-in AI (OpenAI-compatible APIs, Ollama; streaming, embeddings)
 crates/zyrite-export/    Word (.docx) export
+crates/zyrite-i18n/      Language for backend messages: English by default, Simplified Chinese optional
 packages/md-blocks/      Markdown parsing, top-level block splitting, source positions, style detection
 packages/editor-common/  Interfaces, rendering, and typography shared by both editors
 packages/editor-live/    Live preview (CodeMirror 6)

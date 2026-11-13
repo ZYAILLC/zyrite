@@ -152,9 +152,9 @@ function General() {
             setTimeout(() => window.location.reload(), 50);
           }}
           options={[
-            ['system', t.followSystem],
-            ['zh-CN', '简体中文'],
             ['en', 'English'],
+            ['zh-CN', '简体中文'],
+            ['system', t.followSystem],
           ]}
         />
       </Row>

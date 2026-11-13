@@ -211,7 +211,10 @@ pub fn rename(from: &Path, to: &Path) -> Result<(), FileError> {
     if to.starts_with(from) && from != to {
         return Err(FileError::Io(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "不能把文件夹移到它自己里面",
+            zyrite_i18n::tr(
+                "Can't move a folder into itself",
+                "不能把文件夹移到它自己里面",
+            ),
         )));
     }
     fs::rename(from, to).map_err(|e| match e.kind() {

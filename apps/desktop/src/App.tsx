@@ -16,7 +16,7 @@ import { StatusBar } from './components/StatusBar';
 import { TitleBar } from './components/TitleBar';
 import { useShortcuts } from './components/useShortcuts';
 import { useTheme } from './components/useTheme';
-import { t } from './i18n';
+import { locale, t } from './i18n';
 import { dropFiles, newDoc, openDialog, openFolder, openPath, prepareClose, restoreSession, startRecovery } from './lib/document';
 import { backend } from './lib/backend';
 import { basename, dirname } from './lib/paths';
@@ -102,6 +102,8 @@ export function App() {
       if (kinds.includes('grants') || kinds.includes('requests')) void loadAccess();
     });
     void backend.menuLocalize(`${t.settings}…`);
+    // 旧版后端没有这个命令：失败就算了，不影响启动
+    backend.setLocale(locale).catch(() => {});
     const offSettings = backend.onOpenSettings(() => {
       // 已经开着就留在当前分类
       if (!useApp.getState().settingsTab) useApp.setState({ settingsTab: 'general' });

@@ -17,11 +17,18 @@ use zyrite_core::index::Index;
 use zyrite_core::links::is_markdown_path;
 use zyrite_core::store::{self, locate, Activity, AgentInfo, QueueItem, Store, ThreadEntry};
 use zyrite_core::vault;
+use zyrite_i18n::{tr, trf};
 
 /// 支持的协议版本，按新到旧
 const PROTOCOL_VERSIONS: &[&str] = &["2025-06-18", "2025-03-26", "2024-11-05"];
 
-const INSTRUCTIONS: &str = "Zyrite 是一个 Markdown 编辑器，这个 server 让你读写用户的笔记库。\
+const INSTRUCTIONS_EN: &str = "Zyrite is a Markdown editor; this server lets you read and write the user's notes vault. \
+Writes (write_note) don't change files directly: they go into the user's review queue, and the user accepts or rejects each change in Zyrite. \
+The user can leave annotations for you in notes: read them with get_annotations; after changing the file, reply with reply_annotation and set the status to changed. \
+All paths are relative to the vault root, e.g. docs/plan.md. \
+The first time you call a tool, the user has to allow you to access this vault in Zyrite (you wait up to 60 seconds); if access is denied or times out, tell the user instead of retrying again and again.";
+
+const INSTRUCTIONS_ZH: &str = "Zyrite 是一个 Markdown 编辑器，这个 server 让你读写用户的笔记库。\
 写入（write_note）不会直接改文件，而是进入用户的审阅队列，用户在 Zyrite 里逐处接受或拒绝。\
 用户可以在笔记里给你留批注：用 get_annotations 读取，修改文件后用 reply_annotation 回复并把状态改成 changed。\
 路径都是相对库根目录的路径，例如 docs/plan.md。\
@@ -60,7 +67,13 @@ fn exe_of(pid: u32) -> Option<String> {
     {
         let mut buf = [0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
         // SAFETY: 缓冲区在这次调用期间有效，长度如实传入；内核只写入返回值那么多字节
-        let n = unsafe { libc::proc_pidpath(pid as libc::c_int, buf.as_mut_ptr().cast(), buf.len() as u32) };
+        let n = unsafe {
+            libc::proc_pidpath(
+                pid as libc::c_int,
+                buf.as_mut_ptr().cast(),
+                buf.len() as u32,
+            )
+        };
         if n > 0 {
             return Some(String::from_utf8_lossy(&buf[..n as usize]).into_owned());
         }
@@ -80,7 +93,13 @@ fn exe_of(pid: u32) -> Option<String> {
 fn parent_of(pid: u32) -> Option<u32> {
     if let Ok(stat) = fs::read_to_string(format!("/proc/{pid}/stat")) {
         // pid (comm) state ppid ...；comm 里可能有空格，从最后一个 ')' 往后数
-        return stat.rsplit_once(')')?.1.split_whitespace().nth(1)?.parse().ok();
+        return stat
+            .rsplit_once(')')?
+            .1
+            .split_whitespace()
+            .nth(1)?
+            .parse()
+            .ok();
     }
     let out = std::process::Command::new("ps")
         .args(["-o", "ppid=", "-p", &pid.to_string()])
@@ -93,11 +112,17 @@ fn parent_of(pid: u32) -> Option<u32> {
 fn client_exe() -> String {
     #[cfg(unix)]
     {
-        const RELAYS: &[&str] = &["sh", "bash", "zsh", "dash", "fish", "env", "npx", "uvx", "timeout"];
+        const RELAYS: &[&str] = &[
+            "sh", "bash", "zsh", "dash", "fish", "env", "npx", "uvx", "timeout",
+        ];
         let mut pid = std::os::unix::process::parent_id();
         for _ in 0..4 {
             let Some(exe) = exe_of(pid) else { break };
-            let base = exe.rsplit('/').next().unwrap_or(&exe).trim_start_matches('-');
+            let base = exe
+                .rsplit('/')
+                .next()
+                .unwrap_or(&exe)
+                .trim_start_matches('-');
             match parent_of(pid) {
                 Some(up) if RELAYS.contains(&base) && up > 1 => pid = up,
                 _ => return exe,
@@ -121,7 +146,7 @@ pub fn display_name(client: &str) -> String {
     } else if c.contains("codex") {
         "Codex".into()
     } else if client.trim().is_empty() {
-        "MCP 客户端".into()
+        tr("MCP client", "MCP 客户端").into()
     } else {
         client.to_string()
     }
@@ -187,7 +212,12 @@ impl Server {
     }
 
     /// 测试用：指定签名密钥、客户端程序路径、等待时长
-    pub fn with_access(mut self, key: impl Fn() -> Option<Vec<u8>> + Send + 'static, exe: &str, wait_ms: u64) -> Self {
+    pub fn with_access(
+        mut self,
+        key: impl Fn() -> Option<Vec<u8>> + Send + 'static,
+        exe: &str,
+        wait_ms: u64,
+    ) -> Self {
         self.key = Box::new(key);
         self.client_exe = exe.to_string();
         self.wait_ms = wait_ms;
@@ -197,11 +227,21 @@ impl Server {
     fn valid_grant(&mut self) -> Option<Grant> {
         let list = self.store.grants();
         // 没有这个程序的授权就不用验签，也就不碰钥匙串（等用户回答时这里每 200 毫秒跑一次）
-        if !list.iter().any(|g| g.name == self.agent && grants::same_program(&g.exe, &self.client_exe)) {
+        if !list
+            .iter()
+            .any(|g| g.name == self.agent && grants::same_program(&g.exe, &self.client_exe))
+        {
             return None;
         }
         let key = self.key_read.get_or_insert_with(|| (self.key)());
-        grants::find(&list, key.as_deref(), &self.root, &self.agent, &self.client_exe).cloned()
+        grants::find(
+            &list,
+            key.as_deref(),
+            &self.root,
+            &self.agent,
+            &self.client_exe,
+        )
+        .cloned()
     }
 
     /// 这个程序能不能访问这个库：有有效授权直接放行；没有就请用户在 Zyrite 里决定
@@ -212,10 +252,11 @@ impl Server {
         let who = if self.client_exe.is_empty() {
             self.agent.clone()
         } else {
-            format!("{}（{}）", self.agent, self.client_exe)
+            trf!("{} ({})", "{}（{}）", self.agent, self.client_exe)
         };
         if !self.store.app_alive() {
-            return Err(format!(
+            return Err(trf!(
+                "The user hasn't allowed {who} to access this vault yet. Ask the user to open Zyrite and this vault, then try again: Zyrite will ask whether to allow access.",
                 "用户还没有允许 {who} 访问这个笔记库。请让用户打开 Zyrite 并打开这个库，然后重试：Zyrite 会询问是否允许。"
             ));
         }
@@ -227,7 +268,9 @@ impl Server {
             created_ms: store::now_ms(),
             denied: false,
         };
-        self.store.put_request(&request).map_err(|e| e.to_string())?;
+        self.store
+            .put_request(&request)
+            .map_err(|e| e.to_string())?;
         let deadline = store::now_ms() + self.wait_ms;
         loop {
             std::thread::sleep(std::time::Duration::from_millis(200));
@@ -237,11 +280,15 @@ impl Server {
             }
             if self.store.request(&request.id).is_some_and(|r| r.denied) {
                 self.store.remove_request(&request.id);
-                return Err(format!("用户在 Zyrite 里拒绝了 {who} 访问这个笔记库。"));
+                return Err(trf!(
+                    "The user denied {who} access to this vault in Zyrite.",
+                    "用户在 Zyrite 里拒绝了 {who} 访问这个笔记库。"
+                ));
             }
             if store::now_ms() >= deadline {
                 self.store.remove_request(&request.id);
-                return Err(format!(
+                return Err(trf!(
+                    "Timed out after {} seconds waiting for the user to allow {who} in Zyrite. Remind the user to watch for the Zyrite prompt, then try again.",
                     "等待用户在 Zyrite 里允许 {who} 访问超时（{} 秒）。请提醒用户留意 Zyrite 的弹窗后重试。",
                     self.wait_ms / 1000
                 ));
@@ -253,7 +300,10 @@ impl Server {
     fn resolve(&self, path: &str) -> Result<(String, PathBuf), String> {
         let p = Path::new(path.trim().trim_start_matches("./"));
         if p.is_absolute() || p.components().any(|c| !matches!(c, Component::Normal(_))) {
-            return Err(format!("路径必须是库内的相对路径：{path}"));
+            return Err(trf!(
+                "The path must be relative to the vault: {path}",
+                "路径必须是库内的相对路径：{path}"
+            ));
         }
         let rel = p
             .components()
@@ -261,10 +311,16 @@ impl Server {
             .collect::<Vec<_>>()
             .join("/");
         if rel.split('/').any(|s| s.starts_with('.')) {
-            return Err(format!("不能访问隐藏目录：{path}"));
+            return Err(trf!(
+                "Hidden folders can't be accessed: {path}",
+                "不能访问隐藏目录：{path}"
+            ));
         }
         if !is_markdown_path(&rel) {
-            return Err(format!("只能读写 Markdown 文件：{path}"));
+            return Err(trf!(
+                "Only Markdown files can be read or written: {path}",
+                "只能读写 Markdown 文件：{path}"
+            ));
         }
         Ok((rel.clone(), self.root.join(rel)))
     }
@@ -337,30 +393,39 @@ impl Server {
         json!([
             {
                 "name": "list_notes",
-                "description": "列出库里的笔记：路径、标题、修改时间。",
+                "description": tr("List the notes in the vault: path, title, modified time.", "列出库里的笔记：路径、标题、修改时间。"),
                 "inputSchema": { "type": "object", "properties": {
-                    "folder": { "type": "string", "description": "只列这个文件夹（相对路径）" }
+                    "folder": { "type": "string", "description": tr("Only list this folder (relative path)", "只列这个文件夹（相对路径）") }
                 } }
             },
             {
                 "name": "search_notes",
-                "description": "全文搜索。空格分隔的词都要出现；\"短语\"；-排除；path:文件夹；#标签。返回路径、片段和命中数。",
+                "description": tr(
+                    "Full-text search. All space-separated words must appear; \"phrase\"; -exclude; path:folder; #tag. Returns paths, snippets and hit counts.",
+                    "全文搜索。空格分隔的词都要出现；\"短语\"；-排除；path:文件夹；#标签。返回路径、片段和命中数。"
+                ),
                 "inputSchema": { "type": "object", "required": ["query"], "properties": {
                     "query": { "type": "string" },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 100 },
-                    "tag": { "type": "string", "description": "只搜带这个标签的笔记" }
+                    "tag": { "type": "string", "description": tr("Only search notes with this tag", "只搜带这个标签的笔记") }
                 } }
             },
             {
                 "name": "read_note",
-                "description": "读取一篇笔记的原文和 frontmatter。如果有你提交、用户还没审阅的修改，会一并返回。",
+                "description": tr(
+                    "Read a note's source and frontmatter. Changes you submitted that the user hasn't reviewed yet are returned too.",
+                    "读取一篇笔记的原文和 frontmatter。如果有你提交、用户还没审阅的修改，会一并返回。"
+                ),
                 "inputSchema": { "type": "object", "required": ["path"], "properties": {
                     "path": { "type": "string" }
                 } }
             },
             {
                 "name": "write_note",
-                "description": "写入笔记。不会直接改文件，而是进入用户的审阅队列（除非用户开启了直接写入）。mode=replace 用 content 替换全文；append 在末尾追加 content；patch 用 patch 里的 old→new 逐个替换（old 必须在当前内容里唯一出现）。新建笔记用 replace。",
+                "description": tr(
+                    "Write a note. Files aren't changed directly: the change goes into the user's review queue (unless the user turned on direct writes). mode=replace replaces the whole text with content; append adds content at the end; patch applies each old→new in patch (old must appear exactly once in the current text). Use replace to create a note.",
+                    "写入笔记。不会直接改文件，而是进入用户的审阅队列（除非用户开启了直接写入）。mode=replace 用 content 替换全文；append 在末尾追加 content；patch 用 patch 里的 old→new 逐个替换（old 必须在当前内容里唯一出现）。新建笔记用 replace。"
+                ),
                 "inputSchema": { "type": "object", "required": ["path", "mode"], "properties": {
                     "path": { "type": "string" },
                     "mode": { "type": "string", "enum": ["replace", "append", "patch"] },
@@ -368,19 +433,22 @@ impl Server {
                     "patch": { "type": "array", "items": { "type": "object", "required": ["old", "new"], "properties": {
                         "old": { "type": "string" }, "new": { "type": "string" }
                     } } },
-                    "reason": { "type": "string", "description": "这次修改的目的，用户审阅时看得到" }
+                    "reason": { "type": "string", "description": tr("Why you're making this change; the user sees it while reviewing", "这次修改的目的，用户审阅时看得到") }
                 } }
             },
             {
                 "name": "list_backlinks",
-                "description": "指向这篇笔记的链接，带上下文。",
+                "description": tr("Links pointing to this note, with context.", "指向这篇笔记的链接，带上下文。"),
                 "inputSchema": { "type": "object", "required": ["path"], "properties": {
                     "path": { "type": "string" }
                 } }
             },
             {
                 "name": "get_annotations",
-                "description": "读取用户在 Zyrite 里留给 Agent 的批注。status: open（待处理）、changed（Agent 已修改）、resolved（已解决）、orphaned（原文已找不到批注的位置）。",
+                "description": tr(
+                    "Read the annotations the user left for agents in Zyrite. status: open (to do), changed (the agent made changes), resolved (done), orphaned (the annotated text can no longer be found).",
+                    "读取用户在 Zyrite 里留给 Agent 的批注。status: open（待处理）、changed（Agent 已修改）、resolved（已解决）、orphaned（原文已找不到批注的位置）。"
+                ),
                 "inputSchema": { "type": "object", "properties": {
                     "path": { "type": "string" },
                     "status": { "type": "string", "enum": ["open", "changed", "resolved", "orphaned"] }
@@ -388,7 +456,10 @@ impl Server {
             },
             {
                 "name": "reply_annotation",
-                "description": "回复批注，可同时改状态。处理完批注后一般把状态改成 changed，由用户确认后标记 resolved。",
+                "description": tr(
+                    "Reply to an annotation, optionally changing its status. After handling an annotation, usually set it to changed; the user marks it resolved after checking.",
+                    "回复批注，可同时改状态。处理完批注后一般把状态改成 changed，由用户确认后标记 resolved。"
+                ),
                 "inputSchema": { "type": "object", "required": ["id", "message"], "properties": {
                     "id": { "type": "string" },
                     "message": { "type": "string" },
@@ -415,7 +486,10 @@ impl Server {
             "get_annotations",
         ];
         if read_tools.contains(&name) && !config.read {
-            return tool_error("用户在 Zyrite 设置里关闭了读取权限");
+            return tool_error(tr(
+                "The user turned off read access in Zyrite settings",
+                "用户在 Zyrite 设置里关闭了读取权限",
+            ));
         }
         let result = match name {
             "list_notes" => self.list_notes(args),
@@ -423,7 +497,10 @@ impl Server {
             "read_note" => self.read_note(args),
             "write_note" => {
                 if !config.write {
-                    return tool_error("用户没有给你写入权限（在 Zyrite 的 设置 › MCP 里可以打开）");
+                    return tool_error(tr(
+                        "The user hasn't given you write access (it can be turned on in Zyrite under Settings › MCP)",
+                        "用户没有给你写入权限（在 Zyrite 的 设置 › MCP 里可以打开）"
+                    ));
                 }
                 self.write_note(args, config.direct_write)
             }
@@ -431,11 +508,14 @@ impl Server {
             "get_annotations" => self.get_annotations(args),
             "reply_annotation" => {
                 if !config.write {
-                    return tool_error("用户没有给你写入权限（在 Zyrite 的 设置 › MCP 里可以打开）");
+                    return tool_error(tr(
+                        "The user hasn't given you write access (it can be turned on in Zyrite under Settings › MCP)",
+                        "用户没有给你写入权限（在 Zyrite 的 设置 › MCP 里可以打开）"
+                    ));
                 }
                 self.reply_annotation(args)
             }
-            _ => Err(format!("没有这个工具：{name}")),
+            _ => Err(trf!("No such tool: {name}", "没有这个工具：{name}")),
         };
         match result {
             Ok(v) => tool_ok(v),
@@ -467,7 +547,9 @@ impl Server {
     }
 
     fn search_notes(&mut self, args: &Value) -> Result<Value, String> {
-        let mut query = arg_str(args, "query").ok_or("缺少 query")?.to_string();
+        let mut query = arg_str(args, "query")
+            .ok_or(tr("Missing query", "缺少 query"))?
+            .to_string();
         if let Some(tag) = arg_str(args, "tag") {
             query.push_str(&format!(" #{}", tag.trim_start_matches('#')));
         }
@@ -498,8 +580,10 @@ impl Server {
     }
 
     fn read_note(&mut self, args: &Value) -> Result<Value, String> {
-        let (rel, abs) = self.resolve(arg_str(args, "path").ok_or("缺少 path")?)?;
-        let content = fs::read_to_string(&abs).map_err(|_| format!("找不到笔记：{rel}"))?;
+        let (rel, abs) =
+            self.resolve(arg_str(args, "path").ok_or(tr("Missing path", "缺少 path"))?)?;
+        let content = fs::read_to_string(&abs)
+            .map_err(|_| trf!("Note not found: {rel}", "找不到笔记：{rel}"))?;
         let frontmatter = content
             .strip_prefix("---\n")
             .or_else(|| content.strip_prefix("---\r\n"))
@@ -512,17 +596,19 @@ impl Server {
     }
 
     fn write_note(&mut self, args: &Value, direct: bool) -> Result<Value, String> {
-        let (rel, abs) = self.resolve(arg_str(args, "path").ok_or("缺少 path")?)?;
+        let (rel, abs) =
+            self.resolve(arg_str(args, "path").ok_or(tr("Missing path", "缺少 path"))?)?;
         let mode = arg_str(args, "mode").unwrap_or("replace");
         let reason = arg_str(args, "reason").unwrap_or("").to_string();
         let current = self.current(&rel, &abs);
         let base = current.clone().unwrap_or_default();
         let next = match mode {
             "replace" => arg_str(args, "content")
-                .ok_or("replace 需要 content")?
+                .ok_or(tr("replace needs content", "replace 需要 content"))?
                 .to_string(),
             "append" => {
-                let add = arg_str(args, "content").ok_or("append 需要 content")?;
+                let add = arg_str(args, "content")
+                    .ok_or(tr("append needs content", "append 需要 content"))?;
                 let sep = if base.is_empty() || base.ends_with('\n') {
                     ""
                 } else {
@@ -534,18 +620,28 @@ impl Server {
                 let patches = args
                     .get("patch")
                     .and_then(Value::as_array)
-                    .ok_or("patch 需要 patch 数组")?;
-                let mut text = current.ok_or_else(|| format!("找不到笔记：{rel}"))?;
+                    .ok_or(tr("patch needs a patch array", "patch 需要 patch 数组"))?;
+                let mut text =
+                    current.ok_or_else(|| trf!("Note not found: {rel}", "找不到笔记：{rel}"))?;
                 for (i, p) in patches.iter().enumerate() {
-                    let old = arg_str(p, "old").ok_or(format!("第 {} 个 patch 缺少 old", i + 1))?;
-                    let new = arg_str(p, "new").ok_or(format!("第 {} 个 patch 缺少 new", i + 1))?;
+                    let old = arg_str(p, "old").ok_or_else(|| {
+                        trf!("Patch {} is missing old", "第 {} 个 patch 缺少 old", i + 1)
+                    })?;
+                    let new = arg_str(p, "new").ok_or_else(|| {
+                        trf!("Patch {} is missing new", "第 {} 个 patch 缺少 new", i + 1)
+                    })?;
                     match text.matches(old).count() {
                         0 => {
-                            return Err(format!("第 {} 个 patch 的 old 在当前内容里找不到", i + 1))
+                            return Err(trf!(
+                                "Patch {}: old was not found in the current text",
+                                "第 {} 个 patch 的 old 在当前内容里找不到",
+                                i + 1
+                            ))
                         }
                         1 => text = text.replacen(old, new, 1),
                         n => {
-                            return Err(format!(
+                            return Err(trf!(
+                                "Patch {}: old appears {n} times; give a longer, unique snippet",
                                 "第 {} 个 patch 的 old 出现了 {n} 次，请给出更长、唯一的片段",
                                 i + 1
                             ))
@@ -554,7 +650,7 @@ impl Server {
                 }
                 text
             }
-            other => return Err(format!("不支持的 mode：{other}")),
+            other => return Err(trf!("Unsupported mode: {other}", "不支持的 mode：{other}")),
         };
         let disk = fs::read_to_string(&abs).unwrap_or_default();
         let (added, removed) = line_counts(&disk, &next);
@@ -585,12 +681,16 @@ impl Server {
             "queued": true,
             "id": id,
             "path": rel,
-            "message": "已提交到用户的审阅队列，用户在 Zyrite 里接受后才会写入文件",
+            "message": tr(
+                "Submitted to the user's review queue; the file is written only after the user accepts it in Zyrite",
+                "已提交到用户的审阅队列，用户在 Zyrite 里接受后才会写入文件"
+            ),
         }))
     }
 
     fn list_backlinks(&mut self, args: &Value) -> Result<Value, String> {
-        let (rel, _) = self.resolve(arg_str(args, "path").ok_or("缺少 path")?)?;
+        let (rel, _) =
+            self.resolve(arg_str(args, "path").ok_or(tr("Missing path", "缺少 path"))?)?;
         let ix = self.index().map_err(|e| e.to_string())?;
         let back: Vec<Value> = ix
             .backlinks(&rel)
@@ -640,12 +740,12 @@ impl Server {
     }
 
     fn reply_annotation(&mut self, args: &Value) -> Result<Value, String> {
-        let id = arg_str(args, "id").ok_or("缺少 id")?;
-        let message = arg_str(args, "message").ok_or("缺少 message")?;
+        let id = arg_str(args, "id").ok_or(tr("Missing id", "缺少 id"))?;
+        let message = arg_str(args, "message").ok_or(tr("Missing message", "缺少 message"))?;
         let status = arg_str(args, "status");
         if let Some(s) = status {
             if !["open", "changed", "resolved"].contains(&s) {
-                return Err(format!("不支持的状态：{s}"));
+                return Err(trf!("Unsupported status: {s}", "不支持的状态：{s}"));
             }
         }
         let all = self.store.all_annotations();
@@ -653,12 +753,12 @@ impl Server {
             .iter()
             .find(|a| a.id == id)
             .map(|a| a.file.clone())
-            .ok_or(format!("找不到批注：{id}"))?;
+            .ok_or_else(|| trf!("Annotation not found: {id}", "找不到批注：{id}"))?;
         let mut list = self.store.annotations(&file);
         let a = list
             .iter_mut()
             .find(|a| a.id == id)
-            .ok_or(format!("找不到批注：{id}"))?;
+            .ok_or_else(|| trf!("Annotation not found: {id}", "找不到批注：{id}"))?;
         a.thread.push(ThreadEntry {
             by: self.agent.clone(),
             at: store::now_ms().to_string(),
@@ -699,7 +799,7 @@ impl Server {
                     "protocolVersion": version,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": { "name": "zyrite", "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": INSTRUCTIONS,
+                    "instructions": tr(INSTRUCTIONS_EN, INSTRUCTIONS_ZH),
                 }))
             }
             "ping" => Ok(json!({})),
@@ -765,8 +865,14 @@ impl Server {
     }
 }
 
-/// `zyrite mcp [--vault <库>]`；不给 --vault 时用当前目录
+/// `zyrite mcp [--vault <库>] [--lang en|zh-CN]`；不给 --vault 时用当前目录。
+/// 语言：--lang → ZYRITE_LANG 环境变量 → Zyrite 界面上次用的语言 → 英文
 pub fn run_from_args(args: &[String]) -> io::Result<()> {
+    let lang = args
+        .iter()
+        .position(|a| a == "--lang")
+        .and_then(|i| args.get(i + 1));
+    zyrite_i18n::set_locale(zyrite_i18n::resolve(lang.map(String::as_str)));
     let vault = args
         .iter()
         .position(|a| a == "--vault")
@@ -785,6 +891,9 @@ mod exe_tests {
     #[test]
     fn 拿到的是完整路径() {
         let exe = exe_of(std::process::id()).unwrap();
-        assert_eq!(std::fs::canonicalize(&exe).unwrap(), std::env::current_exe().unwrap().canonicalize().unwrap());
+        assert_eq!(
+            std::fs::canonicalize(&exe).unwrap(),
+            std::env::current_exe().unwrap().canonicalize().unwrap()
+        );
     }
 }

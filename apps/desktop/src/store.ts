@@ -4,6 +4,7 @@ import type { Annotation, McpAccess, NoteName, Stamp, TreeEntry } from './lib/ba
 import { type AiSettings, defaultAi, sanitizeAi } from './lib/aiConfig';
 import { type CommandId, defaultKeymap, formatBinding } from './lib/keymap';
 import { isMac } from './lib/platform';
+import { SETTINGS_VERSION, savedLanguageValue } from './i18n';
 import {
   defaultExportPrefs,
   defaultImagePrefs,
@@ -204,7 +205,7 @@ export const defaultSettings: Settings = {
   typewriter: false,
   recent: [],
   defaultEdition: 'full',
-  language: 'system',
+  language: 'en',
   fontSize: 16,
   lineWidth: 720,
   lineHeight: 1.8,
@@ -254,7 +255,7 @@ export function sanitizeSettings(raw: unknown): Settings {
         : d.expanded,
     expandedFor: typeof s.expandedFor === 'string' ? s.expandedFor : d.expandedFor,
     defaultEdition: s.defaultEdition === 'simple' || s.defaultEdition === 'full' ? s.defaultEdition : d.defaultEdition,
-    language: s.language === 'zh-CN' || s.language === 'en' ? s.language : d.language,
+    language: s.language === 'zh-CN' || s.language === 'en' || s.language === 'system' ? s.language : d.language,
     fontSize: typeof s.fontSize === 'number' && s.fontSize >= 12 && s.fontSize <= 24 ? s.fontSize : d.fontSize,
     lineWidth: typeof s.lineWidth === 'number' && s.lineWidth >= 560 && s.lineWidth <= 1200 ? s.lineWidth : d.lineWidth,
     lineHeight: typeof s.lineHeight === 'number' && s.lineHeight >= 1.2 && s.lineHeight <= 2.4 ? s.lineHeight : d.lineHeight,
@@ -353,7 +354,12 @@ export const useApp = create<AppState>()(
     }),
     {
       name: 'zyrite.settings',
-      version: 1,
+      version: SETTINGS_VERSION,
+      // 版本 1 → 2：界面语言默认改成英文，旧版自动存下的“跟随系统”换成英文
+      migrate: (persisted, version) => {
+        const p = (persisted ?? {}) as Record<string, unknown>;
+        return { ...p, language: savedLanguageValue(p.language, version) };
+      },
       storage: createJSONStorage(() => localStorage),
       partialize: (s): Settings => ({
         edition: s.edition,

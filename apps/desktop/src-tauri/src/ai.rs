@@ -136,7 +136,7 @@ pub async fn ai_index(
     key_id: Option<String>,
 ) -> Result<IndexResult, String> {
     let (root, chunks) = all_chunks(&app.state::<IndexState>());
-    let root = root.ok_or("还没有打开文件夹")?;
+    let root = root.ok_or(zyrite_i18n::tr("No folder is open yet", "还没有打开文件夹"))?;
     let key = key_of(key_id.as_deref());
     let mut store = VectorStore::open(&root, &format!("{:?}:{}", provider.kind, provider.model));
     let missing: Vec<Chunk> = store.missing(&chunks).into_iter().cloned().collect();

@@ -31,16 +31,43 @@ pub struct LoadedFile {
 
 #[derive(Debug, thiserror::Error)]
 pub enum FileError {
-    #[error("文件不存在：{0}")]
+    #[error("{}", msg::not_found(.0))]
     NotFound(String),
-    #[error("不是 UTF-8 编码的文本文件：{0}")]
+    #[error("{}", msg::not_utf8(.0))]
     NotUtf8(String),
-    #[error("已经存在：{0}")]
+    #[error("{}", msg::exists(.0))]
     Exists(String),
-    #[error("文件已在外部被修改：{path}")]
+    #[error("{}", msg::conflict(.path))]
     Conflict { path: String, current: Stamp },
     #[error("{0}")]
     Io(#[from] io::Error),
+}
+
+/// 错误文案，按当前界面语言（见 zyrite-i18n）
+mod msg {
+    use zyrite_i18n::trf;
+
+    pub fn not_found(path: &str) -> String {
+        trf!("File not found: {path}", "文件不存在：{path}")
+    }
+
+    pub fn not_utf8(path: &str) -> String {
+        trf!(
+            "Not a UTF-8 text file: {path}",
+            "不是 UTF-8 编码的文本文件：{path}"
+        )
+    }
+
+    pub fn exists(path: &str) -> String {
+        trf!("Already exists: {path}", "已经存在：{path}")
+    }
+
+    pub fn conflict(path: &str) -> String {
+        trf!(
+            "The file was changed outside Zyrite: {path}",
+            "文件已在外部被修改：{path}"
+        )
+    }
 }
 
 /// 传给前端：`{ kind, message, current? }`，界面按 kind 显示本地化文案

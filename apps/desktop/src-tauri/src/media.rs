@@ -92,7 +92,7 @@ pub async fn image_upload(
         "command" => tauri::async_runtime::spawn_blocking(move || upload_command(&command, &path))
             .await
             .map_err(|e| e.to_string())?,
-        _ => Err("没有设置图床".into()),
+        _ => Err(zyrite_i18n::tr("No image host is set up", "没有设置图床").into()),
     }
 }
 
@@ -112,7 +112,12 @@ async fn upload_picgo(url: &str, path: &str) -> Result<String, String> {
         .json(&serde_json::json!({ "list": [path] }))
         .send()
         .await
-        .map_err(|e| format!("连不上 PicGo / PicList（{url}）：{e}"))?
+        .map_err(|e| {
+            zyrite_i18n::trf!(
+                "Can't connect to PicGo / PicList ({url}): {e}",
+                "连不上 PicGo / PicList（{url}）：{e}"
+            )
+        })?
         .json()
         .await
         .map_err(|e| e.to_string())?;
@@ -121,14 +126,14 @@ async fn upload_picgo(url: &str, path: &str) -> Result<String, String> {
         _ => Err(reply
             .message
             .or(reply.msg)
-            .unwrap_or_else(|| "上传失败".into())),
+            .unwrap_or_else(|| zyrite_i18n::tr("Upload failed", "上传失败").into())),
     }
 }
 
 /// 自定义命令：图片路径作为最后一个参数，输出里最后一个 http(s) 地址就是结果
 fn upload_command(command: &str, path: &str) -> Result<String, String> {
     if command.trim().is_empty() {
-        return Err("没有设置上传命令".into());
+        return Err(zyrite_i18n::tr("No upload command is set up", "没有设置上传命令").into());
     }
     let quoted = format!("\"{}\"", path.replace('"', "\\\""));
     let full = format!("{command} {quoted}");
@@ -148,7 +153,11 @@ fn upload_command(command: &str, path: &str) -> Result<String, String> {
         _ => {
             let err = String::from_utf8_lossy(&output.stderr);
             Err(if err.trim().is_empty() {
-                "命令没有输出图片地址".into()
+                zyrite_i18n::tr(
+                    "The command didn't output an image URL",
+                    "命令没有输出图片地址",
+                )
+                .into()
             } else {
                 err.trim().to_string()
             })
@@ -238,9 +247,10 @@ fn import_theme(dir: &Path, path: &Path) -> Result<ThemeFile, String> {
             path.extension()
                 .is_some_and(|e| e.eq_ignore_ascii_case("css"))
         })
-        .ok_or("不是 .css 文件")?
+        .ok_or(zyrite_i18n::tr("Not a .css file", "不是 .css 文件"))?
         .to_string();
-    let css = fs::read_to_string(path).map_err(|e| format!("读不到 {}：{e}", path.display()))?;
+    let css = fs::read_to_string(path)
+        .map_err(|e| zyrite_i18n::trf!("Can't read {}: {e}", "读不到 {}：{e}", path.display()))?;
     let target = dir.join(format!("{name}.css"));
     fs::write(&target, &css).map_err(|e| e.to_string())?;
     // Typora 主题常把字体放在同名文件夹里（例如 drake.css + drake/），也有用别的文件夹名的，
@@ -270,7 +280,7 @@ pub fn theme_remove(app: AppHandle, name: String) -> Result<(), String> {
     let dir = themes_dir(&app)?;
     let css = dir.join(format!("{name}.css"));
     if css.parent() != Some(dir.as_path()) {
-        return Err("主题名无效".into());
+        return Err(zyrite_i18n::tr("Invalid theme name", "主题名无效").into());
     }
     fs::remove_file(css).map_err(|e| e.to_string())
 }
@@ -283,7 +293,11 @@ pub fn theme_read(app: AppHandle, path: PathBuf) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
     let path = path.canonicalize().map_err(|e| e.to_string())?;
     if !path.starts_with(&dir) {
-        return Err("只能读取主题目录里的文件".into());
+        return Err(zyrite_i18n::tr(
+            "Only files in the themes folder can be read",
+            "只能读取主题目录里的文件",
+        )
+        .into());
     }
     let bytes = fs::read(&path).map_err(|e| e.to_string())?;
     Ok(String::from_utf8_lossy(bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes)).into_owned())

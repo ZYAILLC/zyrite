@@ -1,3 +1,4 @@
+import { type Locale, locale } from '../i18n';
 import { useApp } from '../store';
 import type { ProviderConfig } from './aiConfig';
 import { deps } from './document';
@@ -70,30 +71,71 @@ export function complete(p: ProviderConfig, messages: ChatMessage[]): Promise<st
 
 export type RewriteAction = 'polish' | 'continue' | 'shorten' | 'translate' | 'tone' | 'custom';
 
-const SYSTEM_REWRITE =
-  '你是写作助手。只输出改写后的正文（Markdown），不要解释、不要加引号、不要加前后缀。保持原文的 Markdown 格式（链接、强调、列表、双链 [[...]]）。';
+/** 发给模型的提示词，跟随界面语言。两种语言结构一致 */
+const PROMPTS = {
+  'zh-CN': {
+    system:
+      '你是写作助手。只输出改写后的正文（Markdown），不要解释、不要加引号、不要加前后缀。保持原文的 Markdown 格式（链接、强调、列表、双链 [[...]]）。',
+    english: '英文',
+    chinese: '简体中文',
+    task: (action: RewriteAction, target: string, instruction: string): string =>
+      ({
+        polish: '润色下面这段文字：通顺、准确、简洁，不改变原意和语气。',
+        continue: '接着下面这段文字往下写一段，风格和语气保持一致。只输出续写的部分。',
+        shorten: '把下面这段文字缩写到原来的一半左右，保留关键信息。',
+        translate: `把下面这段文字翻译成${target}。`,
+        tone: `把下面这段文字改成${instruction || '更正式'}的语气。`,
+        custom: instruction,
+      })[action],
+    user: (task: string, context: string, selection: string) =>
+      `${task}\n\n上下文（只用来理解，不要改写）：\n${context}\n\n要处理的文字：\n${selection}`,
+    /** 上下文里标出选中的文字 */
+    mark: ['【', '】'] as const,
+    test: '只回复 OK',
+  },
+  en: {
+    system:
+      'You are a writing assistant. Output only the rewritten text (Markdown): no explanations, no quotation marks, no preamble or closing remarks. Keep the original Markdown formatting (links, emphasis, lists, wiki links [[...]]). Unless the task asks for another language, write in the same language as the given text.',
+    english: 'English',
+    chinese: 'Simplified Chinese',
+    task: (action: RewriteAction, target: string, instruction: string): string =>
+      ({
+        polish: 'Polish the text below so it reads smoothly, accurately and concisely, without changing its meaning or tone. Answer in the same language as the given text.',
+        continue: 'Continue the text below with one more paragraph, keeping the same style and tone. Output only the continuation. Answer in the same language as the given text.',
+        shorten: 'Shorten the text below to about half its length, keeping the key information. Answer in the same language as the given text.',
+        translate: `Translate the text below into ${target}.`,
+        tone: `Rewrite the text below in a ${instruction || 'more formal'} tone. Answer in the same language as the given text.`,
+        custom: instruction,
+      })[action],
+    user: (task: string, context: string, selection: string) =>
+      `${task}\n\nContext (for understanding only, do not rewrite it):\n${context}\n\nText to process:\n${selection}`,
+    mark: ['«', '»'] as const,
+    test: 'Reply with just OK',
+  },
+} satisfies Record<Locale, unknown>;
 
-/** 不同语言的界面下，"翻译"的方向：中文 ↔ 英文 */
-function translateTarget(text: string): string {
-  return /[一-鿿]/.test(text) ? '英文' : '简体中文';
+/** "翻译"的方向：中文 ↔ 英文（按原文判断，和界面语言无关） */
+function translateTarget(text: string, lang: Locale): string {
+  return /[一-鿿]/.test(text) ? PROMPTS[lang].english : PROMPTS[lang].chinese;
 }
 
-export function rewritePrompt(action: RewriteAction, selection: string, context: string, instruction = ''): ChatMessage[] {
-  const task: Record<RewriteAction, string> = {
-    polish: '润色下面这段文字：通顺、准确、简洁，不改变原意和语气。',
-    continue: '接着下面这段文字往下写一段，风格和语气保持一致。只输出续写的部分。',
-    shorten: '把下面这段文字缩写到原来的一半左右，保留关键信息。',
-    translate: `把下面这段文字翻译成${translateTarget(selection)}。`,
-    tone: `把下面这段文字改成${instruction || '更正式'}的语气。`,
-    custom: instruction,
-  };
+export function rewritePrompt(action: RewriteAction, selection: string, context: string, instruction = '', lang: Locale = locale): ChatMessage[] {
+  const p = PROMPTS[lang];
   return [
-    { role: 'system', content: SYSTEM_REWRITE },
-    {
-      role: 'user',
-      content: `${task[action]}\n\n上下文（只用来理解，不要改写）：\n${context}\n\n要处理的文字：\n${selection}`,
-    },
+    { role: 'system', content: p.system },
+    { role: 'user', content: p.user(p.task(action, translateTarget(selection, lang), instruction), context, selection) },
   ];
+}
+
+/** 上下文：选中的文字用括号标出来 */
+export function selectionContext(prefix: string, text: string, suffix: string, lang: Locale = locale): string {
+  const [open, close] = PROMPTS[lang].mark;
+  return `${prefix}${open}${text}${close}${suffix}`;
+}
+
+/** 设置里"测试"发的消息 */
+export function testPrompt(lang: Locale = locale): ChatMessage[] {
+  return [{ role: 'user', content: PROMPTS[lang].test }];
 }
 
 /** 没配模型时的提示（不报错、不弹窗，入口显示"去设置模型"） */

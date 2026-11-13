@@ -505,7 +505,9 @@ fn launch_path(state: State<'_, LaunchState>) -> Option<String> {
 /// 系统让 app 打开一个文件：界面已就绪就发事件，否则留给 launch_path
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 fn open_from_system(app: &AppHandle, path: PathBuf) {
-    let Some(state) = app.try_state::<LaunchState>() else { return };
+    let Some(state) = app.try_state::<LaunchState>() else {
+        return;
+    };
     if state.ready.load(std::sync::atomic::Ordering::SeqCst) {
         let _ = app.emit("zyrite://open-path", path.display().to_string());
         if let Some(w) = app.get_webview_window("main") {
@@ -561,6 +563,7 @@ pub fn run() {
             vault_config_set,
             mcp_command,
             menu::menu_localize,
+            menu::set_locale,
             access::mcp_access_list,
             access::mcp_access_answer,
             access::mcp_grant_set,

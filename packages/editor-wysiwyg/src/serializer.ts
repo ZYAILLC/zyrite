@@ -101,7 +101,7 @@ export class BlockSerializer {
   /** 诊断用：假设第 index 块被编辑过，按真实路径重写它 */
   rewriteOriginal(index: number): string {
     const node = this.originals[index];
-    if (!node) throw new RangeError(`没有第 ${index} 块`);
+    if (!node) throw new RangeError(`No block at index ${index}`);
     return this.changed(node, index);
   }
 

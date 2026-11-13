@@ -94,7 +94,7 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 fn unhex(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 != 0 {
+    if !s.len().is_multiple_of(2) {
         return None;
     }
     (0..s.len())
@@ -133,7 +133,9 @@ fn is_version(part: &str) -> bool {
     let semver = part.strip_prefix('v').unwrap_or(part);
     let dotted = semver.starts_with(|c: char| c.is_ascii_digit())
         && semver.contains('.')
-        && semver.chars().all(|c| c.is_ascii_alphanumeric() || "._-+".contains(c));
+        && semver
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "._-+".contains(c));
     let hash = part.len() >= 8
         && part.chars().all(|c| c.is_ascii_hexdigit())
         && part.chars().any(|c| c.is_ascii_digit());
@@ -145,14 +147,26 @@ fn is_version(part: &str) -> bool {
 pub fn same_program(a: &str, b: &str) -> bool {
     let parts = |p: &'_ str| -> Vec<String> {
         p.split(['/', '\\'])
-            .map(|c| if is_version(c) { "*".to_string() } else { c.to_string() })
+            .map(|c| {
+                if is_version(c) {
+                    "*".to_string()
+                } else {
+                    c.to_string()
+                }
+            })
             .collect()
     };
     parts(a) == parts(b)
 }
 
 /// 这个程序有没有有效的授权：程序（版本号不算）和名字都对得上、签名有效
-pub fn find<'a>(grants: &'a [Grant], key: Option<&[u8]>, vault: &Path, name: &str, exe: &str) -> Option<&'a Grant> {
+pub fn find<'a>(
+    grants: &'a [Grant],
+    key: Option<&[u8]>,
+    vault: &Path,
+    name: &str,
+    exe: &str,
+) -> Option<&'a Grant> {
     let key = key?;
     grants
         .iter()
@@ -182,7 +196,14 @@ mod tests {
         let mut g = grant();
         sign(&key, dir.path(), &mut g);
         assert!(verify(&key, dir.path(), &g));
-        assert!(find(std::slice::from_ref(&g), Some(&key), dir.path(), "Claude Code", "/opt/homebrew/bin/claude").is_some());
+        assert!(find(
+            std::slice::from_ref(&g),
+            Some(&key),
+            dir.path(),
+            "Claude Code",
+            "/opt/homebrew/bin/claude"
+        )
+        .is_some());
     }
 
     #[test]
@@ -207,19 +228,45 @@ mod tests {
         let other = decode_key(&new_key()).unwrap();
         assert!(!verify(&other, a.path(), &g));
         // 没有密钥（钥匙串里没有）：一律无效
-        assert!(find(std::slice::from_ref(&g), None, a.path(), "Claude Code", "/opt/homebrew/bin/claude").is_none());
+        assert!(find(
+            std::slice::from_ref(&g),
+            None,
+            a.path(),
+            "Claude Code",
+            "/opt/homebrew/bin/claude"
+        )
+        .is_none());
         // 程序路径不同
-        assert!(find(std::slice::from_ref(&g), Some(&key), a.path(), "Claude Code", "/tmp/fake").is_none());
+        assert!(find(
+            std::slice::from_ref(&g),
+            Some(&key),
+            a.path(),
+            "Claude Code",
+            "/tmp/fake"
+        )
+        .is_none());
     }
 
     #[test]
     fn 升级后还是同一个程序() {
         // 桌面版 Claude Code、原生安装、Homebrew、nvm
         for (old, new) in [
-            ("/Users/a/Claude/claude-code/2.1.317/91184d3d9ba3/claude.app/Contents/MacOS/claude", "/Users/a/Claude/claude-code/2.2.0/0a1b2c3d4e5f/claude.app/Contents/MacOS/claude"),
-            ("/Users/a/.local/share/claude/versions/2.1.154", "/Users/a/.local/share/claude/versions/2.1.200"),
-            ("/opt/homebrew/Cellar/node/22.1.0/bin/node", "/opt/homebrew/Cellar/node/24.0.1_1/bin/node"),
-            ("/Users/a/.nvm/versions/node/v20.1.0/bin/node", "/Users/a/.nvm/versions/node/v22.3.0/bin/node"),
+            (
+                "/Users/a/Claude/claude-code/2.1.317/91184d3d9ba3/claude.app/Contents/MacOS/claude",
+                "/Users/a/Claude/claude-code/2.2.0/0a1b2c3d4e5f/claude.app/Contents/MacOS/claude",
+            ),
+            (
+                "/Users/a/.local/share/claude/versions/2.1.154",
+                "/Users/a/.local/share/claude/versions/2.1.200",
+            ),
+            (
+                "/opt/homebrew/Cellar/node/22.1.0/bin/node",
+                "/opt/homebrew/Cellar/node/24.0.1_1/bin/node",
+            ),
+            (
+                "/Users/a/.nvm/versions/node/v20.1.0/bin/node",
+                "/Users/a/.nvm/versions/node/v22.3.0/bin/node",
+            ),
         ] {
             assert!(same_program(old, new), "{old}");
         }
@@ -240,7 +287,14 @@ mod tests {
         let mut g = grant();
         g.exe = "/a/claude-code/2.1.317/claude".into();
         sign(&key, dir.path(), &mut g);
-        assert!(find(std::slice::from_ref(&g), Some(&key), dir.path(), "Claude Code", "/a/claude-code/2.2.0/claude").is_some());
+        assert!(find(
+            std::slice::from_ref(&g),
+            Some(&key),
+            dir.path(),
+            "Claude Code",
+            "/a/claude-code/2.2.0/claude"
+        )
+        .is_some());
     }
 
     #[test]

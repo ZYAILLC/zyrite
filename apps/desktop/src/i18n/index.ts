@@ -336,6 +336,11 @@ const zhCN = {
   typoraRemove: '删除',
   typoraFilter: 'Typora 主题',
   typoraWysiwygNote: 'Typora 主题按 Typora 的正文结构写，在"所见即所得"模式下效果最完整。',
+  imageLoadFailed: '图片加载失败',
+  canvasUnavailable: 'canvas 不可用',
+  notSvg: '不是 SVG',
+  uploadPicgoOnly: '浏览器里只能用 PicGo 上传',
+  uploadFailed: '上传失败',
 };
 
 export type Messages = typeof zhCN;
@@ -672,6 +677,11 @@ const en: Messages = {
   typoraRemove: 'Remove',
   typoraFilter: 'Typora theme',
   typoraWysiwygNote: 'Typora themes target Typora\'s document structure and look most complete in WYSIWYG mode.',
+  imageLoadFailed: 'Failed to load image',
+  canvasUnavailable: 'Canvas is not available',
+  notSvg: 'Not an SVG',
+  uploadPicgoOnly: 'In the browser, only PicGo upload is supported',
+  uploadFailed: 'Upload failed',
 };
 
 const messages: Record<Locale, Messages> = { 'zh-CN': zhCN, en };
@@ -680,17 +690,32 @@ export function detectLocale(languages: readonly string[] = navigator.languages 
   return languages[0]?.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en';
 }
 
-/** 设置里选的界面语言（存在 zyrite.settings 里）；system 表示跟随系统。改了之后重新加载界面生效 */
+/** 设置（zyrite.settings）的版本号。从 2 开始界面语言默认英文 */
+export const SETTINGS_VERSION = 2;
+
+/**
+ * 存下来的界面语言 → 实际用的设置。默认英文；system（跟随系统）要用户自己选。
+ * 版本 1 里 system 是自动写进去的默认值，不算用户选的，所以换成英文。
+ */
+export function savedLanguageValue(lang: unknown, version: number): 'system' | Locale {
+  if (lang === 'zh-CN' || lang === 'en') return lang;
+  if (lang === 'system' && version >= SETTINGS_VERSION) return 'system';
+  return 'en';
+}
+
+/** 设置里选的界面语言（存在 zyrite.settings 里）。改了之后重新加载界面生效 */
 function savedLanguage(): 'system' | Locale {
   try {
-    const raw = JSON.parse(localStorage.getItem('zyrite.settings') ?? '{}') as { state?: { language?: string } };
-    const lang = raw.state?.language;
-    return lang === 'zh-CN' || lang === 'en' ? lang : 'system';
+    const raw = JSON.parse(localStorage.getItem('zyrite.settings') ?? '{}') as {
+      state?: { language?: unknown };
+      version?: number;
+    };
+    return savedLanguageValue(raw.state?.language, raw.version ?? 0);
   } catch {
-    return 'system';
+    return 'en';
   }
 }
 
-const chosen = typeof localStorage === 'undefined' ? 'system' : savedLanguage();
+const chosen = typeof localStorage === 'undefined' ? 'en' : savedLanguage();
 export const locale: Locale = chosen === 'system' ? detectLocale() : chosen;
 export const t: Messages = messages[locale];

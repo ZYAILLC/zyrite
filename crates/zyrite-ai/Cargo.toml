@@ -8,6 +8,7 @@ authors.workspace = true
 publish = false
 
 [dependencies]
+zyrite-i18n = { path = "../zyrite-i18n" }
 futures-util = "0.3"
 reqwest = { version = "0.13", features = ["json", "stream"] }
 serde = { version = "1", features = ["derive"] }

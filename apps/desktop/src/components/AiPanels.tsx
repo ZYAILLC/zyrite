@@ -1,7 +1,7 @@
 import { renderMarkdown } from '@zyrite/editor-common';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { t } from '../i18n';
-import { openAiSettings, type RewriteAction, rewritePrompt, streamChat } from '../lib/ai';
+import { openAiSettings, presetName, type RewriteAction, rewritePrompt, selectionContext, streamChat } from '../lib/ai';
 import { backend } from '../lib/backend';
 import { activeEditor } from '../lib/editorRef';
 import { isMac } from '../lib/platform';
@@ -50,7 +50,7 @@ export function AiRewrite() {
       setError('');
       setState('running');
       const sel = req.selection;
-      const context = `${sel.prefix}【${sel.text}】${sel.suffix}`;
+      const context = selectionContext(sel.prefix, sel.text, sel.suffix);
       cancel.current = streamChat(chat, rewritePrompt(a, sel.text, context, extra), {
         onDelta: (_d, full) => setResult(full),
         onDone: () => setState('done'),
@@ -125,7 +125,7 @@ export function AiRewrite() {
                 {label}
               </button>
             ))}
-            <span className="ai-model">{chat.name}</span>
+            <span className="ai-model">{presetName(chat.name)}</span>
           </div>
           <input
             className="ai-instruction"

@@ -457,7 +457,10 @@ impl Store {
 
     fn request_path(&self, id: &str) -> PathBuf {
         // id 是 new_id 生成的，只含字母数字和下划线；防一手路径穿越
-        let safe: String = id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
+        let safe: String = id
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect();
         self.dir("requests").join(format!("{safe}.json"))
     }
 
@@ -490,7 +493,10 @@ impl Store {
     pub fn app_heartbeat(&self, pid: u32) -> io::Result<()> {
         write_json(
             &self.root.join(DIR).join("app.json"),
-            &AppPresence { pid, last_seen_ms: now_ms() },
+            &AppPresence {
+                pid,
+                last_seen_ms: now_ms(),
+            },
         )
     }
 
@@ -626,10 +632,21 @@ mod tests {
         s.app_heartbeat(1).unwrap();
         assert!(s.app_alive());
 
-        let r = AccessRequest { id: new_id("r"), name: "Claude Code".into(), exe: "/x".into(), pid: 9, created_ms: now_ms(), denied: false };
+        let r = AccessRequest {
+            id: new_id("r"),
+            name: "Claude Code".into(),
+            exe: "/x".into(),
+            pid: 9,
+            created_ms: now_ms(),
+            denied: false,
+        };
         s.put_request(&r).unwrap();
         assert_eq!(s.requests(), vec![r.clone()]);
-        s.put_request(&AccessRequest { denied: true, ..r.clone() }).unwrap();
+        s.put_request(&AccessRequest {
+            denied: true,
+            ..r.clone()
+        })
+        .unwrap();
         assert!(s.requests().is_empty(), "拒绝了的不再列出");
         assert!(s.request(&r.id).unwrap().denied);
         s.remove_request(&r.id);

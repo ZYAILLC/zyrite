@@ -72,26 +72,43 @@ pub fn mcp_access_list(state: State<'_, IndexState>) -> AccessList {
     };
     let list = s.grants();
     // 没有授权时不碰钥匙串（免得一打开库就弹钥匙串的提示）
-    let key = if list.is_empty() { None } else { grant_key(false).ok().flatten() };
+    let key = if list.is_empty() {
+        None
+    } else {
+        grant_key(false).ok().flatten()
+    };
     let activity = s.activity(500);
     let grants = list
         .into_iter()
         .map(|g| GrantView {
-            valid: key.as_deref().is_some_and(|k| grants::verify(k, s.root(), &g)),
-            last_access_ms: activity.iter().filter(|a| a.agent == g.name).map(|a| a.at_ms).max(),
+            valid: key
+                .as_deref()
+                .is_some_and(|k| grants::verify(k, s.root(), &g)),
+            last_access_ms: activity
+                .iter()
+                .filter(|a| a.agent == g.name)
+                .map(|a| a.at_ms)
+                .max(),
             grant: g,
         })
         .collect();
-    AccessList { grants, requests: s.requests() }
+    AccessList {
+        grants,
+        requests: s.requests(),
+    }
 }
 
 fn store(state: &IndexState) -> Result<Store, FileError> {
-    current_store(state).ok_or_else(|| err("没有打开笔记库"))
+    current_store(state).ok_or_else(|| err(zyrite_i18n::tr("No vault is open", "没有打开笔记库")))
 }
 
 /// 回答授权请求：允许时写一条"读 + 提交写入"的授权，拒绝时把请求标成 denied
 #[tauri::command(async)]
-pub fn mcp_access_answer(state: State<'_, IndexState>, id: String, allow: bool) -> Result<(), FileError> {
+pub fn mcp_access_answer(
+    state: State<'_, IndexState>,
+    id: String,
+    allow: bool,
+) -> Result<(), FileError> {
     let s = store(&state)?;
     let Some(mut req) = s.request(&id) else {
         return Ok(()); // Agent 已经不等了
@@ -100,7 +117,12 @@ pub fn mcp_access_answer(state: State<'_, IndexState>, id: String, allow: bool) 
         req.denied = true;
         return Ok(s.put_request(&req)?);
     }
-    let key = grant_key(true).map_err(err)?.ok_or_else(|| err("无法创建签名密钥"))?;
+    let key = grant_key(true).map_err(err)?.ok_or_else(|| {
+        err(zyrite_i18n::tr(
+            "Couldn't create the signing key",
+            "无法创建签名密钥",
+        ))
+    })?;
     let mut list = s.grants();
     list.retain(|g| !(g.name == req.name && grants::same_program(&g.exe, &req.exe)));
     let mut g = Grant {
@@ -128,7 +150,12 @@ pub fn mcp_grant_set(
     direct_write: bool,
 ) -> Result<(), FileError> {
     let s = store(&state)?;
-    let key = grant_key(true).map_err(err)?.ok_or_else(|| err("无法创建签名密钥"))?;
+    let key = grant_key(true).map_err(err)?.ok_or_else(|| {
+        err(zyrite_i18n::tr(
+            "Couldn't create the signing key",
+            "无法创建签名密钥",
+        ))
+    })?;
     let mut list = s.grants();
     let Some(g) = list.iter_mut().find(|g| g.id == id) else {
         return Ok(());

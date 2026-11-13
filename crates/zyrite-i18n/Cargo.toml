@@ -1,0 +1,10 @@
+[package]
+name = "zyrite-i18n"
+description = "Zyrite 后端的界面语言：默认英文，可选简体中文"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]

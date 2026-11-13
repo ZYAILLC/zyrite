@@ -8,6 +8,7 @@ authors.workspace = true
 publish = false
 
 [dependencies]
+zyrite-i18n = { path = "../zyrite-i18n" }
 base64 = "0.22"
 docx-rs = { version = "0.4", default-features = false }
 serde = { version = "1", features = ["derive"] }

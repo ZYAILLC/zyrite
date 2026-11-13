@@ -8,6 +8,7 @@ authors.workspace = true
 publish = false
 
 [dependencies]
+zyrite-i18n = { path = "../zyrite-i18n" }
 getrandom = "0.3"
 hmac = "0.12"
 ignore = "0.4"

@@ -188,7 +188,7 @@ fn 出错和权限() {
     assert!(r[3]["result"]["content"][0]["text"]
         .as_str()
         .unwrap()
-        .contains("出现了 2 次"));
+        .contains("appears 2 times"));
     assert_eq!(result(&r[4])["queued"], true);
     assert_eq!(r[6]["error"]["code"], -32601);
 
