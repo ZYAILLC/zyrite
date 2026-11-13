@@ -6419,7 +6419,7 @@ dependencies = [
 
 [[package]]
 name = "zyrite-ai"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "futures-util",
  "reqwest",
@@ -6432,7 +6432,7 @@ dependencies = [
 
 [[package]]
 name = "zyrite-core"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "chardetng",
  "encoding_rs",
@@ -6453,7 +6453,7 @@ dependencies = [
 
 [[package]]
 name = "zyrite-desktop"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "arboard",
  "base64 0.22.1",
@@ -6476,7 +6476,7 @@ dependencies = [
 
 [[package]]
 name = "zyrite-export"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "base64 0.22.1",
  "docx-rs",
@@ -6489,11 +6489,11 @@ dependencies = [
 
 [[package]]
 name = "zyrite-i18n"
-version = "1.0.0"
+version = "1.1.0"
 
 [[package]]
 name = "zyrite-mcp"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "keyring",
  "libc",
