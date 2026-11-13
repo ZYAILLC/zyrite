@@ -1,5 +1,6 @@
 import { parseMarkdown, renderHtml } from '@zyrite/md-blocks';
 import type { Nodes, PhrasingContent, Table } from 'mdast';
+import { addColorSwatches } from './color';
 import { highlightCodeBlocks } from './highlight';
 import { renderMath, renderMermaid } from './render';
 import type { ResolveEmbed, ResolveUrl } from './types';
@@ -121,6 +122,7 @@ export function renderMarkdown(el: HTMLElement, markdown: string, resolveUrl?: R
     renderMath(out, code.textContent ?? '', display);
     host.replaceWith(out);
   }
+  addColorSwatches(el);
   const pending: Promise<void>[] = [highlightCodeBlocks(el)];
   for (const code of el.querySelectorAll<HTMLElement>('pre > code.language-mermaid')) {
     const fig = document.createElement('div');

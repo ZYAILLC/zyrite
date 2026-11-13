@@ -1,4 +1,12 @@
-import { highlightCodeBlocks, renderEmbed, renderMath, renderMermaidSvg } from '@zyrite/editor-common';
+import {
+  addColorSwatches,
+  highlightCodeBlocks,
+  renderEmbed,
+  renderMath,
+  renderMermaidSvg,
+  renderTocs,
+  revealTocTarget,
+} from '@zyrite/editor-common';
 import { renderHtml } from '@zyrite/md-blocks';
 import { type MouseEvent as ReactMouseEvent, useEffect, useRef } from 'react';
 import { t } from '../i18n';
@@ -54,6 +62,9 @@ function render(el: HTMLElement, markdown: string, filePath: string | null, isCu
     const out = document.createElement('span');
     if (renderEmbed(out, span.dataset.value ?? span.dataset.target ?? '', resolveEmbed)) span.replaceWith(out);
   }
+  // `[TOC]` 目录、行内代码里颜色值的色块
+  renderTocs(el);
+  addColorSwatches(el);
   // 代码块语法高亮：有缓存的立即上色，其余加载语言后再上色
   void highlightCodeBlocks(el, isCurrent);
   const todo: [HTMLElement, string][] = [];
@@ -122,6 +133,10 @@ export function Preview() {
     const a = (e.target as HTMLElement).closest('a');
     if (!a) return;
     e.preventDefault();
+    if (a.classList.contains('zy-toc-link')) {
+      if (content.current) revealTocTarget(content.current, a);
+      return;
+    }
     if (a.classList.contains('wikilink')) {
       const target = a.dataset.target ?? '';
       void (useApp.getState().folder ? openWikiLink(target) : openLink(target, 'wikilink'));

@@ -1197,6 +1197,21 @@ button.primary:disabled {
   background: var(--z-sel);
 }
 
+/* 文字颜色色板：一排小方块，点了就给选中的文字上色 */
+.selection-menu button.color-swatch {
+  width: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.selection-menu .color-swatch span {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+
 /* ---------- 设置：左侧分类，右侧一行一项，细线分隔 ---------- */
 
 .settings {

@@ -59,6 +59,11 @@ export interface EditorHandle {
   getSelectionInfo(): SelectionInfo | null;
   /** 用新内容替换选中的文字（AI 改写的"替换"）；after 为 true 时插到选区后面 */
   replaceSelection(text: string, after?: boolean): void;
+  /**
+   * 在选中文字前后插入源码（比如文字颜色的 `<span style="color:…">` 和 `</span>`），选中的内容和格式不变。
+   * 所见即所得里选区跨了多个块时不处理，返回 false。
+   */
+  wrapSelection?(before: string, after: string): boolean;
   /** 标出批注：对应文字加下划线，后面加上标编号 */
   setAnnotations(marks: AnnotationMark[]): void;
   /** 各条批注的锚点在窗口里的纵坐标（边注对齐用）；找不到位置的不在结果里 */

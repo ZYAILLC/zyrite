@@ -273,6 +273,20 @@ export function createLiveEditor(opts: LiveOptions): EditorHandle {
         rect: { left: Math.min(a.left, b.left), top: Math.min(a.top, b.top), right: Math.max(a.right, b.right), bottom: Math.max(a.bottom, b.bottom) },
       };
     },
+    wrapSelection(before, after) {
+      const { from, to } = view.state.selection.main;
+      if (from === to) return false;
+      view.dispatch({
+        changes: [
+          { from, insert: before },
+          { from: to, insert: after },
+        ],
+        selection: { anchor: from + before.length, head: to + before.length },
+        userEvent: 'input.format',
+      });
+      view.focus();
+      return true;
+    },
     replaceSelection(text, after) {
       const { from, to } = view.state.selection.main;
       const insert = after ? `${view.state.lineBreak}${view.state.lineBreak}${text}` : text;

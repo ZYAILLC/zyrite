@@ -24,7 +24,7 @@ import {
   SearchQuery,
   setSearchState,
 } from 'prosemirror-search';
-import { EditorState, Plugin, PluginKey, Selection } from 'prosemirror-state';
+import { EditorState, Plugin, PluginKey, Selection, TextSelection } from 'prosemirror-state';
 import { columnResizing, tableEditing } from 'prosemirror-tables';
 import { Decoration, DecorationSet, EditorView } from 'prosemirror-view';
 import {
@@ -37,6 +37,7 @@ import {
 import { annotationKey, annotationPlugin, flatten } from './annotate';
 import { autoPair, buildInputRules, buildKeymaps, calloutType } from './rules';
 import { schema } from './schema';
+import { extras } from './extras';
 import { htmlInline } from './html-inline';
 import { BlockSerializer } from './serializer';
 
@@ -294,6 +295,7 @@ export function createWysiwygEditor(opts: WysiwygOptions): EditorHandle {
           links(opts.onOpenLink),
           missingLinks(opts.linkStatus),
           htmlInline(),
+          extras(),
           annotationPlugin(),
         ],
       }),
@@ -431,6 +433,23 @@ export function createWysiwygEditor(opts: WysiwygOptions): EditorHandle {
         ...anchorAt(flat.text, flat.toOffset(from), flat.toOffset(to)),
         rect: { left: Math.min(a.left, b.left), top: Math.min(a.top, b.top), right: Math.max(a.right, b.right), bottom: Math.max(a.bottom, b.bottom) },
       };
+    },
+    wrapSelection(before, after) {
+      const { state } = view;
+      const { from, to, $from, $to } = state.selection;
+      // 行内 HTML 只能放在同一个段落（标题、表格单元格）里
+      if (from === to || $from.parent !== $to.parent || !$from.parent.inlineContent || $from.parent.type.spec.code) return false;
+      const html = schema.nodes.html_inline!;
+      // 标签带上两端文字的格式（粗体、链接等），写回去是 `**<span>粗</span>**` 而不是把格式拆开
+      const startMarks = state.doc.nodeAt(from)?.marks;
+      const endMarks = state.doc.nodeAt(to - 1)?.marks;
+      const tr = state.tr
+        .insert(to, html.create({ value: after }, null, endMarks))
+        .insert(from, html.create({ value: before }, null, startMarks));
+      tr.setSelection(TextSelection.create(tr.doc, from + 1, to + 1));
+      view.dispatch(tr.scrollIntoView());
+      view.focus();
+      return true;
     },
     replaceSelection(markdown, after) {
       const { state } = view;

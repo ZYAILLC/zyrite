@@ -1,6 +1,8 @@
 import type { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import katex from 'katex';
+// 化学式 \ce{…}、\pu{…}（mhchem 扩展，注册到 KaTeX 上）；导出用的 MathJax 自带这个扩展
+import 'katex/contrib/mhchem';
 
 /** 用 KaTeX 渲染公式；出错时显示原文和错误，不抛异常 */
 export function renderMath(el: HTMLElement, tex: string, displayMode: boolean) {

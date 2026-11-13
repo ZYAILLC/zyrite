@@ -57,8 +57,19 @@ function useCanAnnotate(): boolean {
 
 // ---------- 选中文字后的浮动菜单 ----------
 
-/** 选中文字后浮在上方的菜单："批注给 Agent / AI 改写 / 复制段落链接" */
+/** 文字颜色：中等明度，浅色和深色主题里都看得清 */
+const TEXT_COLORS: [name: string, hex: string][] = [
+  ['red', '#E5484D'],
+  ['orange', '#E5762C'],
+  ['green', '#30A46C'],
+  ['blue', '#3E63DD'],
+  ['purple', '#8E4EC6'],
+  ['gray', '#8B8D98'],
+];
+
+/** 选中文字后浮在上方的菜单："批注给 Agent / AI 改写 / 复制段落链接 / 颜色" */
 export function SelectionMenu() {
+  const [palette, setPalette] = useState(false);
   const canAnnotate = useCanAnnotate();
   const [sel, setSel] = useState<SelectionInfo | null>(null);
   // 刚对这段选中的文字做过操作（批注、改写）：选区不变就不再弹出
@@ -94,6 +105,8 @@ export function SelectionMenu() {
 
   const selKey = sel ? `${sel.prefix}\u0000${sel.text}\u0000${sel.suffix}` : null;
   if (selKey !== handled.current && handled.current !== null && !sel) handled.current = null;
+  // 换了选区，色板收起来
+  useEffect(() => setPalette(false), [selKey]);
   if (!sel || busy || !sel.text.trim() || selKey === handled.current || !document.activeElement?.closest('.editor-host')) {
     return null;
   }
@@ -123,6 +136,13 @@ export function SelectionMenu() {
     handled.current = selKey;
     setSel(null);
   };
+  const color = (hex: string) => {
+    if (activeEditor.current?.wrapSelection?.(`<span style="color:${hex}">`, '</span>')) {
+      handled.current = selKey;
+      setSel(null);
+    }
+    setPalette(false);
+  };
 
   return (
     <div className="selection-menu" role="toolbar" style={{ top, left }} onMouseDown={(e) => e.preventDefault()}>
@@ -138,6 +158,22 @@ export function SelectionMenu() {
       <button type="button" onClick={copyLink}>
         {t.copyBlockLink}
       </button>
+      <button type="button" title={t.textColorHint} aria-expanded={palette} onClick={() => setPalette(!palette)}>
+        {t.textColor}
+      </button>
+      {palette &&
+        TEXT_COLORS.map(([name, hex]) => (
+          <button
+            key={name}
+            type="button"
+            className="color-swatch"
+            title={t.colorNames[name]}
+            aria-label={t.colorNames[name]}
+            onClick={() => color(hex)}
+          >
+            <span style={{ background: hex }} />
+          </button>
+        ))}
     </div>
   );
 }
