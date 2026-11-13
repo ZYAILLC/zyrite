@@ -1,5 +1,7 @@
 English | [简体中文](README-zh.md)
 
+<p align="center"><img src="apps/desktop/src-tauri/icons/icon.svg" width="112" height="112" alt="Zyrite logo"></p>
+
 # Zyrite
 
 An open-source, free Markdown editor: writes like Typora, organizes like a lightweight Obsidian, and is built for reviewing and annotating documents written by AI agents.

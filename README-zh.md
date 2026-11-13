@@ -1,5 +1,7 @@
 [English](README.md) | 简体中文
 
+<p align="center"><img src="apps/desktop/src-tauri/icons/icon.svg" width="112" height="112" alt="Zyrite logo"></p>
+
 # Zyrite（纸砚）
 
 开源、免费的 Markdown 编辑器：写起来像 Typora，管理起来像轻量版 Obsidian，并且专门为 AI Agent 写出来的文档做了阅读、审阅和批注。

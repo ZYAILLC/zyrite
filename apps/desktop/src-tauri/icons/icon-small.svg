@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Zyrite app icon for 16-32 px: same folded Z as icon.svg with heavier strips and less margin, so it stays legible. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#121314"/>
+  <polygon points="261.8,292 762.2,292 527.4,404 261.8,404" fill="#FAFAF8"/>
+  <polygon points="762.2,292 527.4,404 261.8,732 496.6,620" fill="#E0A040"/>
+  <polygon points="496.6,620 762.2,620 762.2,732 261.8,732" fill="#FAFAF8"/>
+</svg>
