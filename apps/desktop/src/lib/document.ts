@@ -331,7 +331,8 @@ export async function prepareClose(): Promise<boolean> {
 /** 启动时：还原未保存的修改，或重新打开上次的文件；再打开命令行传进来的文件 */
 export async function restoreSession(): Promise<void> {
   const session = await deps.backend.loadSession().catch(() => null);
-  if (session?.folder) {
+  // 上次打开的文件夹已经删掉或改名了：不再显示它（下次保存会话时自然从记录里去掉）
+  if (session?.folder && (await deps.backend.isDir(session.folder).catch(() => false))) {
     useApp.getState().setFolder(session.folder);
     void deps.backend.allowAssetDirs([session.folder]).catch(() => {});
   }

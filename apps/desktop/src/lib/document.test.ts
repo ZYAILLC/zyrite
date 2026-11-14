@@ -218,6 +218,7 @@ describe('链接', () => {
 
 describe('文件夹和最近打开', () => {
   it('打开文件夹：记进会话，并弹出快速打开；启动时还原', async () => {
+    fake.write('/vault/a.md', 'A');
     fake.state.folderPick = '/vault';
     expect(await openFolder()).toBe(true);
     expect(useApp.getState()).toMatchObject({ folder: '/vault', palette: { mode: 'files' } });
@@ -227,6 +228,12 @@ describe('文件夹和最近打开', () => {
     useApp.setState({ folder: null });
     await restoreSession();
     expect(useApp.getState().folder).toBe('/vault');
+  });
+
+  it('上次的文件夹已经删掉或改名：启动时不再显示它', async () => {
+    fake.state.session = { path: null, text: null, stamp: null, updatedMs: 0, folder: '/gone-vault' };
+    await restoreSession();
+    expect(useApp.getState().folder).toBeNull();
   });
 
   it('没打开文件夹时，快速打开的范围是当前文件所在目录', async () => {
