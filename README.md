@@ -64,7 +64,10 @@ The first time a program connects, Zyrite asks you to allow it. Grants are per v
 ### Built-in AI (bring your own model)
 
 - Rewrite a selection: polish, continue, shorten, translate, change tone, or give your own instruction. Results stream in below the original.
-- Built-in list of model services: DeepSeek, Qwen, Zhipu GLM, Kimi, Doubao, MiniMax, OpenAI, Anthropic, OpenRouter and more, plus Ollama, LM Studio and any OpenAI-compatible or Anthropic-compatible endpoint. Add several services, sync each one's model list, and pick which one rewrites. Keys are stored in your system keychain, and requests go straight to your provider, never through a Zyrite server.
+- 26 built-in model services. Pay-as-you-go APIs: DeepSeek, Qwen, Zhipu GLM, Kimi, Doubao, Tencent Hunyuan, ERNIE (Baidu Qianfan), MiniMax, SiliconFlow, OpenAI, Claude, Google Gemini, Grok, OpenRouter and OrcaRouter. Subscriptions: coding plans and token plans from Kimi, Zhipu, Alibaba Cloud, MiniMax, Volcano Engine, Tencent Cloud and Baidu, plus ChatGPT. Local: Ollama and LM Studio. Any OpenAI-compatible, Anthropic-compatible or Ollama endpoint works too.
+- **Use your ChatGPT plan:** *Continue with ChatGPT* signs you in through OpenAI's Sign in with ChatGPT, and rewriting counts toward your Plus or Pro plan.
+- **Connect for free:** OrcaRouter and OpenRouter sign you in from the browser and save the API key for you. OrcaRouter starts on its free model.
+- Add several services, sync each one's model list, and pick which one rewrites. Keys and sign-ins are stored in your system keychain, and requests go straight to your provider, never through a Zyrite server.
 
 ### Make it yours
 

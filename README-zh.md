@@ -64,7 +64,10 @@ Claude Code、Cursor、Codex 这类编程 Agent 现在会写大量 Markdown：�
 ### 内置 AI（自带模型）
 
 - 选中改写：润色、续写、缩写、翻译、改语气，或者自己写指令。结果流式显示在原文下方。
-- 内置常用模型服务：DeepSeek、通义千问、智谱 GLM、Kimi、豆包、MiniMax、OpenAI、Anthropic、OpenRouter 等，还有 Ollama、LM Studio，以及任意 OpenAI 兼容或 Anthropic 兼容的接口。可以添加多个服务，各自同步模型列表，再选一个用于改写。密钥存在系统钥匙串里，请求直接发给你的模型服务商，不经过任何 Zyrite 服务器。
+- 内置 26 个模型服务。按量 API：DeepSeek、通义千问、智谱 GLM、Kimi、豆包、腾讯混元、文心（百度千帆）、MiniMax、硅基流动、OpenAI、Claude、Google Gemini、Grok、OpenRouter、OrcaRouter。订阅：Kimi、智谱、阿里云百炼、MiniMax、火山引擎、腾讯云、百度千帆的编程套餐和 Token Plan，以及 ChatGPT。本地：Ollama、LM Studio。也可以接入任意 OpenAI 兼容、Anthropic 兼容或 Ollama 接口。
+- **用 ChatGPT 套餐：** 点"用 ChatGPT 继续"，通过 OpenAI 官方的 Sign in with ChatGPT 登录，改写的用量算在你的 Plus 或 Pro 套餐里。
+- **免费连接：** OrcaRouter 和 OpenRouter 在浏览器里登录授权后自动保存 API 密钥。OrcaRouter 默认用它的免费模型。
+- 可以添加多个服务，各自同步模型列表，再选一个用于改写。密钥和登录凭据存在系统钥匙串里，请求直接发给你的模型服务商，不经过任何 Zyrite 服务器。
 
 ### 个性化
 
