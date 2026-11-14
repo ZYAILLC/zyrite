@@ -13,6 +13,7 @@ use std::time::Duration;
 use serde::Deserialize;
 
 /// 当前平台的 WebView 不支持直接导出时返回这个错误，前端据此退回到打印对话框
+#[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
 pub const UNSUPPORTED: &str = "pdf-unsupported";
 
 /// 等待生成完成的最长时间（很长的文档也够用；超时说明 WebView 没有回调）
@@ -29,8 +30,10 @@ pub struct PdfPage {
     /// 每页的页眉、页脚文字。只有 macOS 用：WebKit 不会在每页重复表格头尾，改在每页的页边距里画；
     /// 其他平台前端直接放在页面里，这里是 None
     #[serde(default)]
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub header: Option<String>,
     #[serde(default)]
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub footer: Option<String>,
 }
 
