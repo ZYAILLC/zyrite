@@ -1607,9 +1607,14 @@ button.primary:disabled {
 }
 
 .ai-connect {
-  align-self: flex-start;
   height: 34px;
   font-weight: 600;
+}
+
+.ai-auth-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .ai-ghost:disabled,

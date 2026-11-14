@@ -21,7 +21,7 @@ import { deps } from '../lib/document';
 import { useApp } from '../store';
 
 /**
- * 设置 › AI 模型：左边是已添加的服务和服务商目录（按量 API、编程套餐、订阅、本地与自定义），
+ * 设置 › AI 模型：左边是已添加的服务和服务商目录（按量 API、订阅、本地与自定义），
  * 右边是选中项的表单。选目录里的服务商 → 填密钥、地址、模型 → 添加服务；选已添加的服务 → 直接改。
  * 密钥存系统钥匙串（按服务 id），界面只知道"有没有"。
  */
@@ -30,7 +30,6 @@ type Selection = { service: string } | { provider: string };
 
 const GROUP_TITLE: Record<ProviderGroup, () => string> = {
   payg: () => t.aiGroupPayg,
-  plan: () => t.aiGroupPlan,
   subscription: () => t.aiGroupSubscription,
   local: () => t.aiGroupLocal,
 };
@@ -39,7 +38,7 @@ const KIND_LABEL: Record<ProviderKind, () => string> = {
   openai: () => t.aiKindOpenai,
   anthropic: () => 'Anthropic',
   ollama: () => 'Ollama',
-  codex: () => 'Codex',
+  chatgpt: () => 'ChatGPT',
 };
 
 const errText = (e: unknown) => String(e instanceof Error ? e.message : e);
@@ -82,15 +81,15 @@ function ServiceForm({
   const [draft, setDraft] = useState(initial);
   const [key, setKey] = useState('');
   const [hasKey, setHasKey] = useState(false);
-  const [busy, setBusy] = useState<'sync' | 'test' | null>(null);
+  const [busy, setBusy] = useState<'sync' | 'test' | 'auth' | null>(null);
   const [status, setStatus] = useState<{ text: string; error?: boolean } | null>(null);
   const keySaved = useRef(false);
   const added = useRef(false);
   const listId = useId();
   const name = isNew ? localName(entry, locale) : serviceName(draft);
-  const preview = !!entry.preview;
   const custom = entry.id === 'custom';
   const needsKey = entry.auth === 'apiKey' || entry.auth === 'optionalKey';
+  const oauth = entry.auth === 'oauth';
 
   useEffect(() => {
     void deps.backend.aiKeyHas(initial.id).then(setHasKey);
@@ -154,7 +153,31 @@ function ServiceForm({
     onRemoved();
   };
 
-  const canAdd = !preview && !!draft.baseUrl.trim() && !!draft.model.trim() && (entry.auth !== 'apiKey' || hasKey || !!key.trim());
+  // 浏览器登录授权：OrcaRouter 等换 API 密钥；ChatGPT 套餐存登录状态。成功后顺便同步模型列表
+  const signIn = async () => {
+    setBusy('auth');
+    setStatus({ text: t.aiAuthWaiting(name) });
+    try {
+      await deps.backend.aiSignIn(entry.id, draft.id);
+      keySaved.current = true;
+      setKey('');
+      setHasKey(true);
+      setStatus({ text: t.aiAuthDone });
+      try {
+        const models = await deps.backend.aiModels(wireProvider(draft), draft.id);
+        update({ models, model: draft.model || models[0] || '' });
+      } catch {
+        // 模型列表拿不到不影响登录，可以手动填模型名
+      }
+    } catch (e) {
+      setStatus({ text: errText(e), error: true });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const keyReady = entry.auth === 'apiKey' ? hasKey || !!key.trim() : entry.auth === 'oauth' ? hasKey : true;
+  const canAdd = !!draft.baseUrl.trim() && !!draft.model.trim() && keyReady;
   const region = entry.regions?.find((r) => r.baseUrl === draft.baseUrl);
 
   return (
@@ -164,20 +187,31 @@ function ServiceForm({
           {entry.mark}
         </span>
         <h3>{name}</h3>
-        {preview && <span className="ai-tag">{t.aiComingSoon}</span>}
       </div>
-      {preview && <p className="settings-hint">{t.aiPreviewNote}</p>}
+      {entry.group === 'subscription' && !oauth && <p className="settings-hint">{t.aiPlanNote}</p>}
 
-      {(entry.connect || entry.auth === 'oauth') && (
+      {(entry.connect || oauth) && (
         <div className="ai-field">
-          <button type="button" className="ai-connect" disabled={preview} onClick={() => setStatus({ text: t.aiConnectSoon })}>
-            {entry.auth === 'oauth' ? t.aiSignIn(name) : t.aiConnect(name)}
-          </button>
-          <p className="settings-hint">{entry.auth === 'oauth' ? t.aiSignInNote : t.aiConnectNote(name)}</p>
+          <div className="ai-auth-row">
+            <button type="button" className="ai-connect" disabled={busy !== null} onClick={() => void signIn()}>
+              {oauth ? (hasKey ? t.aiSignInAgain : t.aiSignIn) : t.aiConnect(name)}
+            </button>
+            {busy === 'auth' && (
+              <button type="button" className="text-button inline" onClick={() => void deps.backend.aiSignInCancel()}>
+                {t.cancel}
+              </button>
+            )}
+          </div>
+          <p className="settings-hint">{oauth ? (hasKey ? t.aiChatgptSignedIn : t.aiChatgptNote) : t.aiConnectNote(name)}</p>
+          {oauth && (
+            <button type="button" className="ai-link" onClick={() => void deps.backend.openExternal('https://chatgpt.com/settings/usage')}>
+              {t.aiManageUsage} ↗
+            </button>
+          )}
         </div>
       )}
 
-      <fieldset className="ai-fields" disabled={preview}>
+      <fieldset className="ai-fields">
         {custom && (
           <>
             <label className="ai-field">
@@ -280,11 +314,9 @@ function ServiceForm({
           </button>
         )}
         <span className="spacer" />
-        {!preview && (
-          <button type="button" className="ai-ghost" disabled={busy !== null || !draft.model.trim() || !draft.baseUrl.trim()} onClick={() => void test()}>
-            {t.aiTest}
-          </button>
-        )}
+        <button type="button" className="ai-ghost" disabled={busy !== null || !draft.model.trim() || !draft.baseUrl.trim()} onClick={() => void test()}>
+          {t.aiTest}
+        </button>
         {isNew ? (
           <button type="button" className="primary" disabled={!canAdd} onClick={() => void add()}>
             {t.aiAddService}
@@ -357,7 +389,6 @@ export function AiSettings() {
                   key={p.id}
                   mark={p.mark}
                   name={localName(p, locale)}
-                  sub={p.preview ? t.aiComingSoon : undefined}
                   active={'provider' in sel && sel.provider === p.id}
                   onClick={() => setSel({ provider: p.id })}
                 />

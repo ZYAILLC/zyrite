@@ -68,23 +68,31 @@ describe('服务商目录', () => {
     }
   });
 
-  it('订阅和编程套餐先只展示；本地模型不要密钥', () => {
-    expect(PROVIDERS.filter((p) => p.group === 'subscription' || p.group === 'plan').every((p) => p.preview)).toBe(true);
-    expect(PROVIDERS.filter((p) => p.group === 'payg').some((p) => p.preview)).toBe(false);
+  it('订阅（含编程套餐）都能添加；免费连接和 ChatGPT 套餐走浏览器登录；本地模型不要密钥', () => {
+    expect(PROVIDERS.filter((p) => p.connect).map((p) => p.id)).toEqual(['orcarouter', 'openrouter']);
+    expect(PROVIDERS.filter((p) => p.connect).every((p) => p.auth === 'apiKey')).toBe(true);
+    expect(PROVIDERS.filter((p) => p.auth === 'oauth').map((p) => p.id)).toEqual(['chatgpt']);
+    expect(providerById('chatgpt')).toMatchObject({ group: 'subscription', kind: 'chatgpt', baseUrl: 'https://api.openai.com/v1' });
+    expect(PROVIDERS.filter((p) => p.group === 'subscription').length).toBeGreaterThan(5);
+    for (const id of ['hunyuan', 'qianfan', 'gemini', 'xai', 'tencent-coding', 'qianfan-plan']) expect(providerById(id)).toBeDefined();
+    expect(providerById('glm-coding')?.regions?.map((r) => r.baseUrl)).toContain('https://api.z.ai/api/coding/paas/v4');
     expect(providerById('ollama')?.auth).toBe('none');
     expect(providerById('anthropic')?.kind).toBe('anthropic');
-    expect(providerById('chatgpt')?.auth).toBe('oauth');
   });
 
   it('名字跟随界面语言，旧版本存的名字也认得', () => {
     const zhipu = draftService(providerById('zhipu')!, 'en');
-    expect(zhipu).toMatchObject({ provider: 'zhipu', kind: 'openai', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' });
+    expect(zhipu).toMatchObject({ provider: 'zhipu', kind: 'openai', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4.7-flash' });
     expect(serviceName(zhipu, 'zh-CN')).toBe('智谱 GLM');
     expect(serviceName(zhipu, 'en')).toBe('Zhipu GLM');
     expect(serviceName({ name: '公司内网', provider: 'custom' }, 'en')).toBe('公司内网');
     expect(legacyProviderId('智谱')).toBe('zhipu');
     expect(legacyProviderId('Zhipu AI')).toBe('zhipu');
     expect(legacyProviderId('硅基流动')).toBe('siliconflow');
+    expect(legacyProviderId('混元')).toBe('hunyuan');
+    expect(legacyProviderId('Anthropic')).toBe('anthropic');
+    expect(legacyProviderId('文心')).toBe('qianfan');
+    expect(serviceName(draftService(providerById('hunyuan')!, 'en'), 'zh-CN')).toBe('腾讯混元');
     expect(legacyProviderId('My server')).toBe('custom');
   });
 });
@@ -109,6 +117,10 @@ describe('设置', () => {
     expect(sanitizeAi({ services: [], chat: P }).services).toEqual([]);
     expect(sanitizeAi(null)).toEqual({ services: [], chatId: null, embed: null, suggest: true });
     expect(sanitizeAi({ services: [{ ...P, kind: 'gemini' }] }).services).toEqual([]);
+    // ChatGPT 套餐的服务能存下来；还没上线前的 codex 协议不认
+    const chatgpt = { ...P, id: 'c1', kind: 'chatgpt', provider: 'chatgpt', baseUrl: 'https://api.openai.com/v1' };
+    expect(sanitizeAi({ services: [chatgpt] }).services).toEqual([chatgpt]);
+    expect(sanitizeAi({ services: [{ ...P, kind: 'codex' }] }).services).toEqual([]);
   });
 });
 

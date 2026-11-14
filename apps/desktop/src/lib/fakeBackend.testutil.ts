@@ -326,6 +326,10 @@ export function fakeBackend() {
     async aiKeyDelete(id) {
       state.keys.delete(id);
     },
+    async aiSignIn(provider, keyId) {
+      state.keys.set(keyId, `signed-in:${provider}`);
+    },
+    aiSignInCancel: async () => {},
     async aiChat(id, p, _k, messages) {
       state.aiRequests.push(messages);
       state.aiProviders.push(p);

@@ -544,6 +544,7 @@ pub fn run() {
             app.manage(WatchState::default());
             app.manage(IndexState::default());
             app.manage(ai::AiState::default());
+            app.manage(ai::OauthState::default());
             access::start_heartbeat(app.handle());
             menu::install(app)?;
             Ok(())
@@ -584,6 +585,8 @@ pub fn run() {
             ai::ai_key_set,
             ai::ai_key_has,
             ai::ai_key_delete,
+            ai::ai_oauth,
+            ai::ai_oauth_cancel,
             ai::ai_chat,
             ai::ai_cancel,
             ai::ai_models,

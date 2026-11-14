@@ -320,6 +320,10 @@ export interface Backend {
   aiKeySet(id: string, key: string): Promise<void>;
   aiKeyHas(id: string): Promise<boolean>;
   aiKeyDelete(id: string): Promise<void>;
+  /** 在浏览器里登录授权（provider 是目录里的服务商 id），拿到的密钥或登录状态存在 keyId 下 */
+  aiSignIn(provider: string, keyId: string): Promise<void>;
+  /** 取消正在进行的浏览器授权 */
+  aiSignInCancel(): Promise<void>;
   /** 开始流式对话，输出通过 onAiEvent 推送 */
   aiChat(id: string, provider: AiProvider, keyId: string, messages: { role: string; content: string }[]): Promise<void>;
   aiCancel(id: string): Promise<void>;
@@ -511,6 +515,8 @@ const tauriBackend: Backend = {
   aiKeySet: (id, key) => call('ai_key_set', { id, key }),
   aiKeyHas: (id) => call('ai_key_has', { id }),
   aiKeyDelete: (id) => call('ai_key_delete', { id }),
+  aiSignIn: (provider, keyId) => call('ai_oauth', { provider, keyId }),
+  aiSignInCancel: () => call('ai_oauth_cancel'),
   aiChat: (id, provider, keyId, messages) => call('ai_chat', { id, provider, keyId, messages }),
   aiCancel: (id) => call('ai_cancel', { id }),
   aiModels: (provider, keyId) => call('ai_models', { provider, keyId }),
@@ -851,6 +857,11 @@ export const webBackend: Backend = {
       delete d.keys[id];
     });
   },
+  // 浏览器调试：收不到本机回调，不能登录授权
+  async aiSignIn() {
+    throw new Error(t.aiSignInDesktopOnly);
+  },
+  async aiSignInCancel() {},
   async aiChat(id, provider, keyId, messages) {
     // 浏览器调试：直接 fetch（服务商要允许跨域，本地测试用）。协议细节和 Rust 侧 zyrite-ai 保持一致
     const controller = new AbortController();
@@ -861,7 +872,7 @@ export const webBackend: Backend = {
     void (async () => {
       let full = '';
       try {
-        if (kind === 'codex') throw new Error(t.aiUnsupported);
+        if (kind === 'chatgpt') throw new Error(t.aiSignInDesktopOnly);
         const system = messages.filter((m) => m.role === 'system').map((m) => m.content);
         const path = kind === 'openai' ? 'chat/completions' : kind === 'anthropic' ? 'messages' : 'api/chat';
         const body =
@@ -912,7 +923,7 @@ export const webBackend: Backend = {
   },
   async aiModels(provider, keyId) {
     const { kind } = provider;
-    if (kind === 'codex') throw new Error(t.aiUnsupported);
+    if (kind === 'chatgpt') throw new Error(t.aiSignInDesktopOnly);
     const resp = await fetch(webAiUrl(provider, kind === 'ollama' ? 'api/tags' : 'models'), { headers: webAiAuth(kind, webData().keys[keyId]) });
     if (!resp.ok) throw new Error(`${resp.status} ${await resp.text()}`);
     const v = await resp.json();

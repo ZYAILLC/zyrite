@@ -5,7 +5,10 @@
 //!   `{base}/chat/completions`（SSE 流式）、`{base}/models`、`{base}/embeddings`
 //! - Anthropic Messages：`{base}/messages`（SSE 流式）、`{base}/models`
 //! - Ollama：`{base}/api/chat`（逐行 JSON 流式）、`{base}/api/tags`、`{base}/api/embed`
-//! - Codex（ChatGPT 订阅登录）：只占位，还不支持，调用会返回 Unsupported
+//! - ChatGPT 套餐（在浏览器里用 ChatGPT 登录，见 [`oauth`]）：OpenAI Responses API，
+//!   `{base}/responses`（SSE 流式，必须 store=false、stream=true）、`{base}/models`；不支持向量
+
+pub mod oauth;
 
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -17,7 +20,8 @@ pub enum Kind {
     Openai,
     Anthropic,
     Ollama,
-    Codex,
+    /// ChatGPT 套餐：Responses API，key 是登录后拿到的 access token
+    Chatgpt,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,9 +47,15 @@ pub enum AiError {
     Status { status: u16, body: String },
     #[error("{}", msg::parse(.0))]
     Parse(String),
-    /// 这种协议还不支持这个操作（例如订阅登录的服务）
+    /// 这种协议不支持这个操作（例如 Anthropic、ChatGPT 套餐没有向量接口）
     #[error("{}", msg::unsupported())]
     Unsupported,
+    /// 浏览器登录授权出错（已经是给用户看的文案）
+    #[error("{0}")]
+    Auth(String),
+    /// 流在回答完成前就断了
+    #[error("{}", msg::incomplete())]
+    Incomplete,
 }
 
 /// 错误文案，按当前界面语言（见 zyrite-i18n）
@@ -71,7 +81,19 @@ mod msg {
     }
 
     pub fn unsupported() -> String {
-        zyrite_i18n::tr("This service isn't supported yet", "暂时还不支持这个服务").to_string()
+        zyrite_i18n::tr(
+            "This service doesn't support this feature",
+            "这个服务不支持这项功能",
+        )
+        .to_string()
+    }
+
+    pub fn incomplete() -> String {
+        zyrite_i18n::tr(
+            "The answer was cut off before it finished. Try again.",
+            "回答没有完成就中断了，请再试一次。",
+        )
+        .to_string()
     }
 }
 
@@ -186,7 +208,25 @@ fn chat_request(p: &Provider, messages: &[Message]) -> Result<(&'static str, Val
             }
             ("messages", body)
         }
-        Kind::Codex => return Err(AiError::Unsupported),
+        Kind::Chatgpt => {
+            // Responses API：system 放 instructions，其余放 input
+            let system: Vec<&str> = messages
+                .iter()
+                .filter(|m| m.role == "system")
+                .map(|m| m.content.as_str())
+                .collect();
+            let input: Vec<&Message> = messages.iter().filter(|m| m.role != "system").collect();
+            let mut body = json!({
+                "model": p.model,
+                "input": input,
+                "store": false,
+                "stream": true,
+            });
+            if !system.is_empty() {
+                body["instructions"] = Value::String(system.join("\n\n"));
+            }
+            ("responses", body)
+        }
     })
 }
 
@@ -216,10 +256,16 @@ fn parse_line(kind: Kind, line: &str) -> Result<Line, AiError> {
     }
     let v: Value =
         serde_json::from_str(data).map_err(|e| AiError::Parse(format!("{e}: {data}")))?;
-    if let Some(err) = v.get("error") {
+    if let Some(err) = v.get("error").filter(|e| !e.is_null()) {
         return Err(AiError::Status {
             status: 200,
             body: err.to_string(),
+        });
+    }
+    if kind == Kind::Chatgpt && v.get("type").and_then(Value::as_str) == Some("error") {
+        return Err(AiError::Status {
+            status: 200,
+            body: v.to_string().chars().take(500).collect(),
         });
     }
     let text = |ptr: &str| {
@@ -229,7 +275,20 @@ fn parse_line(kind: Kind, line: &str) -> Result<Line, AiError> {
             .to_string()
     };
     let delta = match kind {
-        Kind::Openai | Kind::Codex => text("/choices/0/delta/content"),
+        Kind::Openai => text("/choices/0/delta/content"),
+        Kind::Chatgpt => match v.get("type").and_then(Value::as_str) {
+            Some("response.output_text.delta") => text("/delta"),
+            Some("response.completed" | "response.incomplete") => return Ok(Line::Done),
+            Some("response.failed") => {
+                return Err(AiError::Status {
+                    status: 200,
+                    body: v
+                        .pointer("/response/error")
+                        .map_or_else(|| v.to_string(), Value::to_string),
+                })
+            }
+            _ => String::new(),
+        },
         Kind::Ollama => {
             let d = text("/message/content");
             if v.get("done").and_then(Value::as_bool).unwrap_or(false) {
@@ -288,8 +347,12 @@ pub async fn chat(
             }
         }
     }
-    if !buf.is_empty() {
-        handle(&String::from_utf8_lossy(&buf), &mut full)?;
+    if !buf.is_empty() && handle(&String::from_utf8_lossy(&buf), &mut full)? {
+        return Ok(full);
+    }
+    // Responses API 一定以 response.completed 收尾，没收到就是中途断了
+    if p.kind == Kind::Chatgpt {
+        return Err(AiError::Incomplete);
     }
     Ok(full)
 }
@@ -298,6 +361,8 @@ pub async fn chat(
 fn parse_models(kind: Kind, v: &Value) -> Result<Vec<String>, AiError> {
     let (list, field) = match kind {
         Kind::Ollama => (v.get("models"), "name"),
+        // ChatGPT 套餐：{ models: [{ slug, visibility }] }，只要 visibility == "list" 的
+        Kind::Chatgpt => (v.get("models"), "slug"),
         _ => (v.get("data"), "id"),
     };
     let list = list
@@ -305,6 +370,9 @@ fn parse_models(kind: Kind, v: &Value) -> Result<Vec<String>, AiError> {
         .ok_or_else(|| AiError::Parse(v.to_string().chars().take(300).collect()))?;
     let mut names: Vec<String> = list
         .iter()
+        .filter(|m| {
+            kind != Kind::Chatgpt || m.get("visibility").and_then(Value::as_str) == Some("list")
+        })
         .filter_map(|m| m.get(field).and_then(Value::as_str))
         .map(str::to_string)
         .collect();
@@ -316,9 +384,8 @@ fn parse_models(kind: Kind, v: &Value) -> Result<Vec<String>, AiError> {
 /// 服务商提供的模型列表（"同步模型列表"）
 pub async fn list_models(p: &Provider, key: Option<&str>) -> Result<Vec<String>, AiError> {
     let path = match p.kind {
-        Kind::Openai | Kind::Anthropic => "models",
+        Kind::Openai | Kind::Anthropic | Kind::Chatgpt => "models",
         Kind::Ollama => "api/tags",
-        Kind::Codex => return Err(AiError::Unsupported),
     };
     parse_models(p.kind, &get(p, path, key).await?)
 }
@@ -372,7 +439,7 @@ pub async fn embed(
             items.sort_by_key(|x| x.0);
             items.into_iter().map(|x| x.1).collect::<Vec<_>>()
         }
-        Kind::Anthropic | Kind::Codex => return Err(AiError::Unsupported),
+        Kind::Anthropic | Kind::Chatgpt => return Err(AiError::Unsupported),
         Kind::Ollama => {
             let v: Value = post(
                 p,
@@ -447,11 +514,53 @@ mod tests {
     }
 
     #[test]
-    fn codex_is_not_supported_yet() {
-        assert!(matches!(
-            chat_request(&provider(Kind::Codex), &[msg("user", "u")]),
-            Err(AiError::Unsupported)
-        ));
+    fn chatgpt_uses_responses_api() {
+        let (path, body) = chat_request(
+            &provider(Kind::Chatgpt),
+            &[msg("system", "be brief"), msg("user", "hi")],
+        )
+        .unwrap();
+        assert_eq!(path, "responses");
+        assert_eq!(body["instructions"], "be brief");
+        assert_eq!(body["input"][0]["role"], "user");
+        assert_eq!(body["input"].as_array().unwrap().len(), 1);
+        assert_eq!(body["store"], false);
+        assert_eq!(body["stream"], true);
+    }
+
+    #[test]
+    fn parses_chatgpt_stream() {
+        let k = Kind::Chatgpt;
+        assert_eq!(
+            parse_line(k, "event: response.output_text.delta").unwrap(),
+            Line::Skip
+        );
+        assert_eq!(
+            parse_line(
+                k,
+                r#"data: {"type":"response.created","response":{"error":null}}"#
+            )
+            .unwrap(),
+            Line::Skip
+        );
+        assert_eq!(
+            parse_line(
+                k,
+                r#"data: {"type":"response.output_text.delta","delta":"你好"}"#
+            )
+            .unwrap(),
+            Line::Delta("你好".into())
+        );
+        assert_eq!(
+            parse_line(k, r#"data: {"type":"response.completed","response":{}}"#).unwrap(),
+            Line::Done
+        );
+        assert!(parse_line(
+            k,
+            r#"data: {"type":"response.failed","response":{"error":{"code":"subscription_sharing_usage_limit_exceeded"}}}"#
+        )
+        .is_err());
+        assert!(parse_line(k, r#"data: {"type":"error","code":"x","message":"y"}"#).is_err());
     }
 
     #[test]
@@ -517,6 +626,15 @@ mod tests {
         let ollama = json!({ "models": [{ "name": "qwen3:8b" }] });
         assert_eq!(parse_models(Kind::Ollama, &ollama).unwrap(), ["qwen3:8b"]);
         assert!(parse_models(Kind::Anthropic, &json!({ "oops": 1 })).is_err());
+        let chatgpt = json!({ "models": [
+            { "slug": "gpt-b", "visibility": "list" },
+            { "slug": "hidden", "visibility": "hide" },
+            { "slug": "gpt-a", "visibility": "list" }
+        ] });
+        assert_eq!(
+            parse_models(Kind::Chatgpt, &chatgpt).unwrap(),
+            ["gpt-a", "gpt-b"]
+        );
     }
 
     #[test]
