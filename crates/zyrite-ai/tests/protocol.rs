@@ -1,10 +1,10 @@
-//! 用本地的假服务商检查协议：OpenAI 兼容接口的 SSE、Ollama 的逐行 JSON、两种向量接口、错误状态码
+//! 用本地的假服务商检查协议：OpenAI 兼容接口的 SSE、Anthropic 的 SSE、Ollama 的逐行 JSON、向量接口、模型列表、错误状态码
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::thread;
 
-use zyrite_ai::{chat, embed, Kind, Message, Provider};
+use zyrite_ai::{chat, embed, list_models, Kind, Message, Provider};
 
 /// 起一个只回一次请求的 HTTP 服务；返回地址和"收到的请求"
 fn serve_once(
@@ -165,4 +165,76 @@ async fn 错误() {
         .unwrap_err()
         .to_string()
         .contains("Can't connect to"));
+}
+
+#[tokio::test]
+async fn anthropic_流式() {
+    let (addr, h) = serve_once(
+        "200 OK",
+        "text/event-stream",
+        vec![
+            "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{}}\n\n".into(),
+            "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"你\"}}\n\n".into(),
+            "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_de".into(),
+            "lta\",\"text\":\"好\"}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n".into(),
+        ],
+    );
+    let p = Provider {
+        kind: Kind::Anthropic,
+        base_url: format!("{addr}/v1"),
+        model: "claude-x".into(),
+    };
+    let messages = vec![
+        Message {
+            role: "system".into(),
+            content: "只回复中文".into(),
+        },
+        msgs().remove(0),
+    ];
+    let full = chat(&p, Some("sk-ant"), &messages, |_| {}).await.unwrap();
+    assert_eq!(full, "你好");
+    let req = h.join().unwrap();
+    let lower = req.to_lowercase();
+    assert!(req.starts_with("POST /v1/messages"), "{req}");
+    assert!(lower.contains("x-api-key: sk-ant"), "{req}");
+    assert!(lower.contains("anthropic-version:"), "{req}");
+    assert!(!lower.contains("authorization:"), "{req}");
+    assert!(req.contains("\"system\":\"只回复中文\""), "{req}");
+}
+
+#[tokio::test]
+async fn 模型列表() {
+    let (addr, h) = serve_once(
+        "200 OK",
+        "application/json",
+        vec![
+            "{\"object\":\"list\",\"data\":[{\"id\":\"glm-4.6\"},{\"id\":\"glm-4-flash\"}]}".into(),
+        ],
+    );
+    let p = Provider {
+        kind: Kind::Openai,
+        base_url: format!("{addr}/v4"),
+        model: String::new(),
+    };
+    let models = list_models(&p, Some("k")).await.unwrap();
+    assert_eq!(models, vec!["glm-4-flash", "glm-4.6"]);
+    let req = h.join().unwrap();
+    assert!(req.starts_with("GET /v4/models"), "{req}");
+    assert!(
+        req.to_lowercase().contains("authorization: bearer k"),
+        "{req}"
+    );
+
+    let (addr, h) = serve_once(
+        "200 OK",
+        "application/json",
+        vec!["{\"models\":[{\"name\":\"qwen3:8b\",\"model\":\"qwen3:8b\"}]}".into()],
+    );
+    let p = Provider {
+        kind: Kind::Ollama,
+        base_url: addr,
+        model: String::new(),
+    };
+    assert_eq!(list_models(&p, None).await.unwrap(), vec!["qwen3:8b"]);
+    assert!(h.join().unwrap().starts_with("GET /api/tags"));
 }

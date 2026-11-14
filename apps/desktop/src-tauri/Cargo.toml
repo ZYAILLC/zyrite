@@ -32,5 +32,21 @@ zyrite-export = { path = "../../../crates/zyrite-export" }
 zyrite-i18n = { path = "../../../crates/zyrite-i18n" }
 zyrite-mcp = { path = "../../../crates/zyrite-mcp" }
 
+# 导出 PDF 用各平台 WebView 的原生接口。这些库 tauri / wry 已经在用，
+# 版本和 Cargo.lock 里锁定的一致，打开的 feature 也都是它们已经打开的，不增加新的依赖
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSAttributedString", "NSColor", "NSFont", "NSGraphicsContext", "NSPrintInfo", "NSPrintOperation", "NSResponder", "NSView", "NSWindow"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSAttributedString", "NSDictionary", "NSGeometry", "NSString", "NSURL"] }
+objc2-web-kit = { version = "0.3", default-features = false, features = ["std", "objc2-app-kit", "WKWebView"] }
+
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.39"
+windows-core = "0.62"
+
+[target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
+gtk = "0.18"
+webkit2gtk = { version = "=2.0.2", features = ["v2_38"] }
+
 [dev-dependencies]
 tempfile = "3"

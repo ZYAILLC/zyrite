@@ -102,6 +102,15 @@ pub fn ai_chat(
     lock(&state.0).insert(id, handle);
 }
 
+/// 同步模型列表：向服务商要它提供的模型名
+#[tauri::command]
+pub async fn ai_models(provider: Provider, key_id: Option<String>) -> Result<Vec<String>, String> {
+    let key = key_of(key_id.as_deref());
+    zyrite_ai::list_models(&provider, key.as_deref())
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn ai_cancel(state: State<'_, AiState>, id: String) {
     if let Some(h) = lock(&state.0).remove(&id) {

@@ -1,6 +1,6 @@
 import { type Locale, locale } from '../i18n';
 import { useApp } from '../store';
-import type { ProviderConfig } from './aiConfig';
+import { chatService, type ProviderConfig, wireProvider } from './aiConfig';
 import { deps } from './document';
 
 export * from './aiConfig';
@@ -46,7 +46,7 @@ export function streamChat(p: ProviderConfig, messages: ChatMessage[], h: Stream
     .then((unlisten) => {
       off = unlisten;
       if (finished) unlisten();
-      else void deps.backend.aiChat(id, p, p.id, messages).catch((err) => {
+      else void deps.backend.aiChat(id, wireProvider(p), p.id, messages).catch((err) => {
         finished = true;
         unlisten();
         h.onError?.(String(err instanceof Error ? err.message : err));
@@ -140,7 +140,7 @@ export function testPrompt(lang: Locale = locale): ChatMessage[] {
 
 /** 没配模型时的提示（不报错、不弹窗，入口显示"去设置模型"） */
 export function needModel(): boolean {
-  return !useApp.getState().ai.chat;
+  return !chatService(useApp.getState().ai);
 }
 
 export function openAiSettings() {

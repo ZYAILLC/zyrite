@@ -64,7 +64,7 @@ Claude Code、Cursor、Codex 这类编程 Agent 现在会写大量 Markdown：�
 ### 内置 AI（自带模型）
 
 - 选中改写：润色、续写、缩写、翻译、改语气，或者自己写指令。结果流式显示在原文下方。
-- 支持任意 OpenAI 兼容接口（OpenAI、DeepSeek 等）和本地 Ollama 模型。key 存在系统钥匙串里，请求直接发给你的模型服务商，不经过任何 Zyrite 服务器。
+- 内置常用模型服务：DeepSeek、通义千问、智谱 GLM、Kimi、豆包、MiniMax、OpenAI、Anthropic、OpenRouter 等，还有 Ollama、LM Studio，以及任意 OpenAI 兼容或 Anthropic 兼容的接口。可以添加多个服务，各自同步模型列表，再选一个用于改写。密钥存在系统钥匙串里，请求直接发给你的模型服务商，不经过任何 Zyrite 服务器。
 
 ### 个性化
 
@@ -129,7 +129,7 @@ apps/desktop/            Tauri 应用：src/（React 前端）+ src-tauri/（Rus
 crates/zyrite-core/      核心库：文件读写（原子保存、外部修改检测）、库（文件树、监听、文件操作）、
                          链接和标签索引、全文搜索、恢复缓存、.zyrite/ 数据（基线、待审阅、批注）、向量索引
 crates/zyrite-mcp/       MCP server（stdio，`zyrite mcp --vault <路径> [--lang en|zh-CN]`）
-crates/zyrite-ai/        内置 AI 的模型调用（OpenAI 兼容接口、Ollama；流式输出、向量）
+crates/zyrite-ai/        内置 AI 的模型调用（OpenAI 兼容、Anthropic、Ollama 三种协议；流式输出、模型列表、向量）
 crates/zyrite-export/    Word（.docx）导出
 crates/zyrite-i18n/      后端文案的语言：默认英文，可选简体中文
 packages/md-blocks/      Markdown 解析、顶层块切分、源码位置、风格探测

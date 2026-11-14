@@ -5,7 +5,8 @@ import { openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 import { type Locale, t } from '../i18n';
 import { useApp } from '../store';
 import { dirname, IMAGE_EXT, isDocument, isMarkdownDoc, isUrl, MEDIA_EXT, resolvePath } from './paths';
-import { isTauri } from './platform';
+import type { ProviderKind } from './aiProviders';
+import { isMac, isTauri } from './platform';
 import { allowImage, type ImagePrefs } from './prefs';
 
 /**
@@ -188,7 +189,7 @@ export interface McpAccess {
 export interface AiProvider {
   id: string;
   name: string;
-  kind: 'openai' | 'ollama';
+  kind: ProviderKind;
   baseUrl: string;
   model: string;
 }
@@ -226,6 +227,19 @@ export class FileError extends Error {
 
 export type UnsavedChoice = 'save' | 'discard' | 'cancel';
 export type ConflictChoice = 'overwrite' | 'reload' | 'cancel';
+
+/** 导出 PDF 的页面设置 */
+export interface PdfPage {
+  paper: 'A4' | 'Letter';
+  /** 四边页边距（毫米） */
+  marginMm: number;
+  /** 由 exportPdf 画在每页的页眉、页脚（pdfHeaderFooter 为 true 时才传，否则是 null） */
+  header: string | null;
+  footer: string | null;
+}
+
+/** Rust 端表示"当前 WebView 不支持直接导出 PDF"的错误 */
+const PDF_UNSUPPORTED = 'pdf-unsupported';
 
 export interface Backend {
   pickOpen(): Promise<string | null>;
@@ -309,6 +323,8 @@ export interface Backend {
   /** 开始流式对话，输出通过 onAiEvent 推送 */
   aiChat(id: string, provider: AiProvider, keyId: string, messages: { role: string; content: string }[]): Promise<void>;
   aiCancel(id: string): Promise<void>;
+  /** 同步模型列表：向服务商要它提供的模型名 */
+  aiModels(provider: AiProvider, keyId: string): Promise<string[]>;
   onAiEvent(fn: (e: AiEvent) => void): Promise<() => void>;
   /** 给库建向量索引，返回块数和新算的块数 */
   aiIndex(provider: AiProvider): Promise<{ chunks: number; embedded: number }>;
@@ -337,6 +353,17 @@ export interface Backend {
   readBase64(path: string): Promise<string>;
   writeText(path: string, text: string): Promise<void>;
   exportDocx(path: string, doc: unknown): Promise<void>;
+  /**
+   * 把当前窗口里的打印容器直接排版成 PDF 写到 path（不弹打印对话框）。
+   * 返回 false 表示这个 WebView 不支持直接导出（比如 WebView2 运行时太旧），调用方改用打印对话框；
+   * 没有这个方法的后端（浏览器调试）也走打印对话框。
+   */
+  exportPdf?(path: string, page: PdfPage): Promise<boolean>;
+  /**
+   * true：页眉页脚交给 exportPdf 画在每一页，不放进页面里（macOS：WebKit 打印时不会在每页重复表格头尾）；
+   * false：页眉页脚放在页面的表格头尾里（WebView2 会在每页重复）
+   */
+  readonly pdfHeaderFooter?: boolean;
   printWindow(): Promise<void>;
   themeList(): Promise<ThemeFile[]>;
   themeImport(path: string): Promise<ThemeFile>;
@@ -486,6 +513,7 @@ const tauriBackend: Backend = {
   aiKeyDelete: (id) => call('ai_key_delete', { id }),
   aiChat: (id, provider, keyId, messages) => call('ai_chat', { id, provider, keyId, messages }),
   aiCancel: (id) => call('ai_cancel', { id }),
+  aiModels: (provider, keyId) => call('ai_models', { provider, keyId }),
   onAiEvent: (fn) => listen<AiEvent>('zyrite://ai', (e) => fn(e.payload)),
   aiIndex: (provider) => call('ai_index', { provider, keyId: provider.id }),
   onAiIndex: (fn) => listen<{ done: number; total: number }>('zyrite://ai-index', (e) => fn(e.payload)),
@@ -510,6 +538,16 @@ const tauriBackend: Backend = {
   readBase64: (path) => call('read_base64', { path }),
   writeText: (path, text) => call('write_text', { path, text }),
   exportDocx: (path, doc) => call('export_docx', { path, doc }),
+  pdfHeaderFooter: isMac,
+  async exportPdf(path, page) {
+    try {
+      await call('export_pdf', { path, page });
+      return true;
+    } catch (e) {
+      if (e instanceof Error && e.message === PDF_UNSUPPORTED) return false;
+      throw e;
+    }
+  },
   printWindow: () => call('print_window'),
   themeList: () => call('theme_list'),
   themeImport: (path) => call('theme_import', { path }),
@@ -814,19 +852,26 @@ export const webBackend: Backend = {
     });
   },
   async aiChat(id, provider, keyId, messages) {
-    // 浏览器调试：直接 fetch（服务商要允许跨域，本地测试用）
+    // 浏览器调试：直接 fetch（服务商要允许跨域，本地测试用）。协议细节和 Rust 侧 zyrite-ai 保持一致
     const controller = new AbortController();
     webAi.set(id, controller);
     const emit = (e: AiEvent) => webAiListeners.forEach((fn) => fn(e));
     const key = webData().keys[keyId];
-    const openai = provider.kind === 'openai';
+    const { kind } = provider;
     void (async () => {
       let full = '';
       try {
-        const resp = await fetch(`${provider.baseUrl.replace(/\/$/, '')}/${openai ? 'chat/completions' : 'api/chat'}`, {
+        if (kind === 'codex') throw new Error(t.aiUnsupported);
+        const system = messages.filter((m) => m.role === 'system').map((m) => m.content);
+        const path = kind === 'openai' ? 'chat/completions' : kind === 'anthropic' ? 'messages' : 'api/chat';
+        const body =
+          kind === 'anthropic'
+            ? { model: provider.model, max_tokens: 8192, stream: true, messages: messages.filter((m) => m.role !== 'system'), ...(system.length ? { system: system.join('\n\n') } : {}) }
+            : { model: provider.model, messages, stream: true };
+        const resp = await fetch(webAiUrl(provider, path), {
           method: 'POST',
-          headers: { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) },
-          body: JSON.stringify({ model: provider.model, messages, stream: true }),
+          headers: { 'content-type': 'application/json', ...webAiAuth(kind, key) },
+          body: JSON.stringify(body),
           signal: controller.signal,
         });
         if (!resp.ok || !resp.body) throw new Error(`${resp.status} ${await resp.text()}`);
@@ -840,10 +885,17 @@ export const webBackend: Backend = {
           while ((nl = buf.indexOf('\n')) >= 0) {
             const line = buf.slice(0, nl).trim();
             buf = buf.slice(nl + 1);
-            const data = openai ? (line.startsWith('data:') ? line.slice(5).trim() : '') : line;
+            const data = kind === 'ollama' ? line : line.startsWith('data:') ? line.slice(5).trim() : '';
             if (!data || data === '[DONE]') continue;
             const v = JSON.parse(data);
-            const delta: string = openai ? (v.choices?.[0]?.delta?.content ?? '') : (v.message?.content ?? '');
+            const delta: string =
+              kind === 'openai'
+                ? (v.choices?.[0]?.delta?.content ?? '')
+                : kind === 'anthropic'
+                  ? v.type === 'content_block_delta'
+                    ? (v.delta?.text ?? '')
+                    : ''
+                  : (v.message?.content ?? '');
             if (delta) {
               full += delta;
               emit({ id, delta, done: false });
@@ -857,6 +909,15 @@ export const webBackend: Backend = {
         webAi.delete(id);
       }
     })();
+  },
+  async aiModels(provider, keyId) {
+    const { kind } = provider;
+    if (kind === 'codex') throw new Error(t.aiUnsupported);
+    const resp = await fetch(webAiUrl(provider, kind === 'ollama' ? 'api/tags' : 'models'), { headers: webAiAuth(kind, webData().keys[keyId]) });
+    if (!resp.ok) throw new Error(`${resp.status} ${await resp.text()}`);
+    const v = await resp.json();
+    const list: { id?: string; name?: string }[] = (kind === 'ollama' ? v.models : v.data) ?? [];
+    return [...new Set(list.map((m) => (kind === 'ollama' ? m.name : m.id)).filter((x): x is string => !!x))].sort();
   },
   async aiCancel(id) {
     webAi.get(id)?.abort();
@@ -970,6 +1031,17 @@ function webDownload(path: string, blob: Blob) {
   a.download = path.slice(path.lastIndexOf('/') + 1);
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/** 浏览器调试用：拼接口地址 */
+function webAiUrl(p: AiProvider, path: string): string {
+  return `${p.baseUrl.replace(/\/$/, '')}/${path}`;
+}
+
+/** 浏览器调试用：按协议带认证（和 Rust 侧一致） */
+function webAiAuth(kind: ProviderKind, key: string | undefined): Record<string, string> {
+  if (kind === 'anthropic') return { 'anthropic-version': '2023-06-01', ...(key ? { 'x-api-key': key, 'anthropic-dangerous-direct-browser-access': 'true' } : {}) };
+  return key ? { authorization: `Bearer ${key}` } : {};
 }
 
 const webAi = new Map<string, AbortController>();

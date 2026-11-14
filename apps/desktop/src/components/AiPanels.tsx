@@ -1,7 +1,7 @@
 import { renderMarkdown } from '@zyrite/editor-common';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { t } from '../i18n';
-import { openAiSettings, presetName, type RewriteAction, rewritePrompt, selectionContext, streamChat } from '../lib/ai';
+import { chatService, openAiSettings, type RewriteAction, rewritePrompt, selectionContext, serviceName, streamChat } from '../lib/ai';
 import { backend } from '../lib/backend';
 import { activeEditor } from '../lib/editorRef';
 import { isMac } from '../lib/platform';
@@ -22,7 +22,7 @@ const Markdown = memo(function Markdown({ text, className }: { text: string; cla
 /** 选中文字 → 润色、续写、缩写、翻译、改语气或自由指令；结果显示在原文下方，流式输出 */
 export function AiRewrite() {
   const req = useApp((s) => s.aiRewrite);
-  const chat = useApp((s) => s.ai.chat);
+  const chat = useApp((s) => chatService(s.ai));
   const [action, setAction] = useState<RewriteAction | null>(null);
   const [instruction, setInstruction] = useState('');
   const [result, setResult] = useState('');
@@ -125,7 +125,7 @@ export function AiRewrite() {
                 {label}
               </button>
             ))}
-            <span className="ai-model">{presetName(chat.name)}</span>
+            <span className="ai-model">{serviceName(chat)}</span>
           </div>
           <input
             className="ai-instruction"

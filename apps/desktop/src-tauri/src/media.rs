@@ -173,7 +173,7 @@ pub fn export_docx(path: PathBuf, doc: zyrite_export::Doc) -> Result<(), String>
     files::write_atomic(&path, out.get_ref()).map_err(|e| e.to_string())
 }
 
-/// 打印当前窗口（导出 PDF：系统打印对话框里选"存储为 PDF"）
+/// 打印当前窗口（不能直接导出 PDF 时的后备：在系统打印对话框里选"存储为 PDF"）
 #[tauri::command]
 pub fn print_window(window: tauri::WebviewWindow) -> Result<(), String> {
     window.print().map_err(|e| e.to_string())

@@ -12,7 +12,8 @@ import { typoraCss } from './typoraTheme';
 /**
  * 导出：
  * - HTML：单文件，图片 base64 内嵌，带当前主题的 CSS；公式是 MathJax 生成的 SVG（不依赖字体），Mermaid 是 SVG
- * - PDF：同样的内容放进打印容器，用 WebView 打印（系统对话框里存为 PDF），纸张、边距、页眉页脚按设置
+ * - PDF：同样的内容放进打印容器，由 WebView 按设置的纸张、边距直接生成 PDF 文件；
+ *   不支持时退回系统打印对话框
  * - Word：Markdown → 简单文档结构，公式、Mermaid、图片都转成 PNG，交给 Rust（docx-rs）生成
  */
 
@@ -221,43 +222,87 @@ ${printScoped()}
 ${typoraCss}`;
 }
 
+/** 按导出设置的页眉（文档标题）、页脚（导出日期）文字；没开的是 null */
+function headerFooter(src: Source): { header: string | null; footer: string | null } {
+  const prefs = useApp.getState().exportPrefs;
+  return {
+    header: prefs.header === 'title' ? src.title : null,
+    footer: prefs.footer === 'date' ? new Date().toLocaleDateString(locale) : null,
+  };
+}
+
+/**
+ * 把要导出的内容放进打印容器（打印时只显示它）；返回移除容器的函数。
+ * withHeaderFooter 时页眉页脚放在表格的 thead / tfoot 里（Chromium 内核每页重复，WebKit 只在首页 / 末页）。
+ */
+async function mountPrint(src: Source, withHeaderFooter: boolean): Promise<() => void> {
+  document.getElementById(PRINT_ID)?.remove();
+  document.getElementById(PRINT_STYLE_ID)?.remove();
+  const style = document.createElement('style');
+  style.id = PRINT_STYLE_ID;
+  style.textContent = printCss();
+  const box = document.createElement('div');
+  box.id = PRINT_ID;
+  const { header, footer } = withHeaderFooter ? headerFooter(src) : { header: null, footer: null };
+  const head = header === null ? '' : `<div class="zy-print-head">${esc(header)}</div>`;
+  const foot = footer === null ? '' : `<div class="zy-print-foot">${esc(footer)}</div>`;
+  const scope = useApp.getState().typoraTheme ? ' zy-typora' : '';
+  box.innerHTML = `<table class="zy-print-frame"><thead><tr><td>${head}</td></tr></thead><tfoot><tr><td>${foot}</td></tr></tfoot><tbody><tr><td><div class="${scope.trim()}"><div id="write" class="zy-doc">${await renderBody(src)}</div></div></td></tr></tbody></table>`;
+  document.head.append(style);
+  document.body.append(box);
+  document.documentElement.classList.add('zy-printing');
+  // 等图片解码完再打印
+  await Promise.all(
+    [...box.querySelectorAll('img')].map((img) =>
+      img.complete
+        ? null
+        : new Promise<void>((resolve) => {
+            img.addEventListener('load', () => resolve(), { once: true });
+            img.addEventListener('error', () => resolve(), { once: true });
+          }),
+    ),
+  );
+  return () => {
+    document.documentElement.classList.remove('zy-printing');
+    box.remove();
+    style.remove();
+  };
+}
+
+/** 退回到系统打印对话框：用户在对话框里存成 PDF */
+async function printDialog(src: Source): Promise<void> {
+  const cleanup = await mountPrint(src, true);
+  window.addEventListener('afterprint', cleanup, { once: true });
+  await deps.backend.printWindow();
+}
+
+/**
+ * 导出 PDF：先选保存位置，再由 WebView 按设置的纸张和页边距直接生成 PDF 文件。
+ * 后端不支持直接导出时（浏览器调试、WebView 太旧）走打印对话框。
+ */
 export function exportPdf(): Promise<void> {
   return run('PDF', async () => {
     const src = source();
-    const prefs = useApp.getState().exportPrefs;
-    document.getElementById(PRINT_ID)?.remove();
-    document.getElementById(PRINT_STYLE_ID)?.remove();
-    const style = document.createElement('style');
-    style.id = PRINT_STYLE_ID;
-    style.textContent = printCss();
-    const box = document.createElement('div');
-    box.id = PRINT_ID;
-    const head = prefs.header === 'title' ? `<div class="zy-print-head">${esc(src.title)}</div>` : '';
-    const foot = prefs.footer === 'date' ? `<div class="zy-print-foot">${new Date().toLocaleDateString(locale)}</div>` : '';
-    // 页眉页脚放在表格的 thead / tfoot 里，打印时每页都会重复
-    const scope = useApp.getState().typoraTheme ? ' zy-typora' : '';
-    box.innerHTML = `<table class="zy-print-frame"><thead><tr><td>${head}</td></tr></thead><tfoot><tr><td>${foot}</td></tr></tfoot><tbody><tr><td><div class="${scope.trim()}"><div id="write" class="zy-doc">${await renderBody(src)}</div></div></td></tr></tbody></table>`;
-    document.head.append(style);
-    document.body.append(box);
-    document.documentElement.classList.add('zy-printing');
-    // 等图片解码完再打印
-    await Promise.all(
-      [...box.querySelectorAll('img')].map((img) =>
-        img.complete
-          ? null
-          : new Promise<void>((resolve) => {
-              img.addEventListener('load', () => resolve(), { once: true });
-              img.addEventListener('error', () => resolve(), { once: true });
-            }),
-      ),
-    );
-    const cleanup = () => {
-      document.documentElement.classList.remove('zy-printing');
-      box.remove();
-      style.remove();
-    };
-    window.addEventListener('afterprint', cleanup, { once: true });
-    await deps.backend.printWindow();
+    const backend = deps.backend;
+    if (!backend.exportPdf) {
+      await printDialog(src);
+      return null;
+    }
+    const path = await backend.pickExport(defaultExportPath(src, 'pdf'), { name: 'PDF', extensions: ['pdf'] });
+    if (!path) return null;
+    const { paper, margin } = useApp.getState().exportPrefs;
+    // 后端能在每页画页眉页脚时交给它，否则放进页面
+    const native = backend.pdfHeaderFooter === true;
+    const { header, footer } = native ? headerFooter(src) : { header: null, footer: null };
+    const cleanup = await mountPrint(src, !native);
+    let done: boolean;
+    try {
+      done = await backend.exportPdf(path, { paper, marginMm: margin, header, footer });
+    } finally {
+      cleanup();
+    }
+    if (done) return path;
+    await printDialog(src);
     return null;
   });
 }

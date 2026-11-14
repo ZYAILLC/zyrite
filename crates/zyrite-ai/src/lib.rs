@@ -1,7 +1,11 @@
 //! Zyrite 内置 AI：直接调用用户配置的服务商，不经过任何 Zyrite 或 z-y.ai 的服务器。
 //!
-//! - OpenAI 兼容接口（DeepSeek、硅基流动、豆包、智谱、OpenAI……）：`{base}/chat/completions`（SSE 流式）、`{base}/embeddings`
-//! - Ollama：`{base}/api/chat`（逐行 JSON 流式）、`{base}/api/embed`
+//! 按协议分（服务商目录在前端，每个服务商对应其中一种协议）：
+//! - OpenAI 兼容（DeepSeek、通义千问、智谱、Kimi、豆包、OpenRouter、LM Studio……）：
+//!   `{base}/chat/completions`（SSE 流式）、`{base}/models`、`{base}/embeddings`
+//! - Anthropic Messages：`{base}/messages`（SSE 流式）、`{base}/models`
+//! - Ollama：`{base}/api/chat`（逐行 JSON 流式）、`{base}/api/tags`、`{base}/api/embed`
+//! - Codex（ChatGPT 订阅登录）：只占位，还不支持，调用会返回 Unsupported
 
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -11,7 +15,9 @@ use serde_json::{json, Value};
 #[serde(rename_all = "camelCase")]
 pub enum Kind {
     Openai,
+    Anthropic,
     Ollama,
+    Codex,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,6 +43,9 @@ pub enum AiError {
     Status { status: u16, body: String },
     #[error("{}", msg::parse(.0))]
     Parse(String),
+    /// 这种协议还不支持这个操作（例如订阅登录的服务）
+    #[error("{}", msg::unsupported())]
+    Unsupported,
 }
 
 /// 错误文案，按当前界面语言（见 zyrite-i18n）
@@ -60,6 +69,10 @@ mod msg {
             "看不懂服务商的返回：{s}"
         )
     }
+
+    pub fn unsupported() -> String {
+        zyrite_i18n::tr("This service isn't supported yet", "暂时还不支持这个服务").to_string()
+    }
 }
 
 impl Serialize for AiError {
@@ -67,6 +80,11 @@ impl Serialize for AiError {
         s.serialize_str(&self.to_string())
     }
 }
+
+/// Anthropic Messages API 要求的版本头
+const ANTHROPIC_VERSION: &str = "2023-06-01";
+/// Anthropic 必须给 max_tokens；改写用不了这么多，只是上限
+const ANTHROPIC_MAX_TOKENS: u32 = 8192;
 
 fn url(p: &Provider, path: &str) -> String {
     format!(
@@ -83,21 +101,28 @@ fn client() -> reqwest::Client {
         .unwrap_or_default()
 }
 
-async fn post(
-    p: &Provider,
-    path: &str,
+/// 按协议带上认证：Anthropic 用 x-api-key，其余用 Bearer；没有 key 就不带（本地模型）
+fn authorize(
+    kind: Kind,
+    req: reqwest::RequestBuilder,
     key: Option<&str>,
-    body: Value,
-) -> Result<reqwest::Response, AiError> {
-    let target = url(p, path);
-    let mut req = client().post(&target).json(&body);
-    if let Some(k) = key.filter(|k| !k.is_empty()) {
-        req = req.bearer_auth(k);
+) -> reqwest::RequestBuilder {
+    let req = match kind {
+        Kind::Anthropic => req.header("anthropic-version", ANTHROPIC_VERSION),
+        _ => req,
+    };
+    match (kind, key.filter(|k| !k.is_empty())) {
+        (Kind::Anthropic, Some(k)) => req.header("x-api-key", k),
+        (_, Some(k)) => req.bearer_auth(k),
+        (_, None) => req,
     }
+}
+
+async fn send(target: String, req: reqwest::RequestBuilder) -> Result<reqwest::Response, AiError> {
     let resp = req
         .send()
         .await
-        .map_err(|e| AiError::Connect(target.clone(), e.to_string()))?;
+        .map_err(|e| AiError::Connect(target, e.to_string()))?;
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
@@ -110,14 +135,30 @@ async fn post(
     Ok(resp)
 }
 
-/// 流式对话：每收到一段就调用 on_delta，返回完整回答
-pub async fn chat(
+async fn post(
     p: &Provider,
+    path: &str,
     key: Option<&str>,
-    messages: &[Message],
-    mut on_delta: impl FnMut(&str),
-) -> Result<String, AiError> {
-    let (path, body) = match p.kind {
+    body: Value,
+) -> Result<reqwest::Response, AiError> {
+    let target = url(p, path);
+    let req = authorize(p.kind, client().post(&target).json(&body), key);
+    send(target, req).await
+}
+
+async fn get(p: &Provider, path: &str, key: Option<&str>) -> Result<Value, AiError> {
+    let target = url(p, path);
+    let req = authorize(p.kind, client().get(&target), key);
+    send(target, req)
+        .await?
+        .json()
+        .await
+        .map_err(|e| AiError::Parse(e.to_string()))
+}
+
+/// 对话请求：路径和请求体
+fn chat_request(p: &Provider, messages: &[Message]) -> Result<(&'static str, Value), AiError> {
+    Ok(match p.kind {
         Kind::Openai => (
             "chat/completions",
             json!({ "model": p.model, "messages": messages, "stream": true }),
@@ -126,68 +167,160 @@ pub async fn chat(
             "api/chat",
             json!({ "model": p.model, "messages": messages, "stream": true }),
         ),
+        Kind::Anthropic => {
+            // system 不放在 messages 里，单独一个字段
+            let system: Vec<&str> = messages
+                .iter()
+                .filter(|m| m.role == "system")
+                .map(|m| m.content.as_str())
+                .collect();
+            let rest: Vec<&Message> = messages.iter().filter(|m| m.role != "system").collect();
+            let mut body = json!({
+                "model": p.model,
+                "max_tokens": ANTHROPIC_MAX_TOKENS,
+                "messages": rest,
+                "stream": true,
+            });
+            if !system.is_empty() {
+                body["system"] = Value::String(system.join("\n\n"));
+            }
+            ("messages", body)
+        }
+        Kind::Codex => return Err(AiError::Unsupported),
+    })
+}
+
+/// 流里的一行解析出来的结果
+#[derive(Debug, PartialEq)]
+enum Line {
+    /// 空行、event: 行、心跳等
+    Skip,
+    Delta(String),
+    Done,
+}
+
+fn parse_line(kind: Kind, line: &str) -> Result<Line, AiError> {
+    let line = line.trim();
+    if line.is_empty() {
+        return Ok(Line::Skip);
+    }
+    let data = match kind {
+        Kind::Ollama => line,
+        _ => match line.strip_prefix("data:") {
+            Some(d) => d.trim(),
+            None => return Ok(Line::Skip), // event:、注释行
+        },
     };
+    if data == "[DONE]" {
+        return Ok(Line::Done);
+    }
+    let v: Value =
+        serde_json::from_str(data).map_err(|e| AiError::Parse(format!("{e}: {data}")))?;
+    if let Some(err) = v.get("error") {
+        return Err(AiError::Status {
+            status: 200,
+            body: err.to_string(),
+        });
+    }
+    let text = |ptr: &str| {
+        v.pointer(ptr)
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string()
+    };
+    let delta = match kind {
+        Kind::Openai | Kind::Codex => text("/choices/0/delta/content"),
+        Kind::Ollama => {
+            let d = text("/message/content");
+            if v.get("done").and_then(Value::as_bool).unwrap_or(false) {
+                return Ok(if d.is_empty() {
+                    Line::Done
+                } else {
+                    // 最后一条也可能带内容：先交出内容，流结束时自然收尾
+                    Line::Delta(d)
+                });
+            }
+            d
+        }
+        Kind::Anthropic => match v.get("type").and_then(Value::as_str) {
+            Some("content_block_delta") => text("/delta/text"),
+            Some("message_stop") => return Ok(Line::Done),
+            _ => String::new(),
+        },
+    };
+    Ok(if delta.is_empty() {
+        Line::Skip
+    } else {
+        Line::Delta(delta)
+    })
+}
+
+/// 流式对话：每收到一段就调用 on_delta，返回完整回答
+pub async fn chat(
+    p: &Provider,
+    key: Option<&str>,
+    messages: &[Message],
+    mut on_delta: impl FnMut(&str),
+) -> Result<String, AiError> {
+    let (path, body) = chat_request(p, messages)?;
     let resp = post(p, path, key, body).await?;
     let mut stream = resp.bytes_stream();
     let mut buf: Vec<u8> = Vec::new();
     let mut full = String::new();
-    let mut handle_line = |line: &str, full: &mut String| -> Result<bool, AiError> {
-        let line = line.trim();
-        if line.is_empty() {
-            return Ok(false);
+    let mut handle = |line: &str, full: &mut String| -> Result<bool, AiError> {
+        match parse_line(p.kind, line)? {
+            Line::Skip => Ok(false),
+            Line::Done => Ok(true),
+            Line::Delta(d) => {
+                full.push_str(&d);
+                on_delta(&d);
+                Ok(false)
+            }
         }
-        let data = match p.kind {
-            Kind::Openai => match line.strip_prefix("data:") {
-                Some(d) => d.trim(),
-                None => return Ok(false), // event:、注释行
-            },
-            Kind::Ollama => line,
-        };
-        if data == "[DONE]" {
-            return Ok(true);
-        }
-        let v: Value =
-            serde_json::from_str(data).map_err(|e| AiError::Parse(format!("{e}: {data}")))?;
-        if let Some(err) = v.get("error") {
-            return Err(AiError::Status {
-                status: 200,
-                body: err.to_string(),
-            });
-        }
-        let (delta, done) = match p.kind {
-            Kind::Openai => (
-                v.pointer("/choices/0/delta/content")
-                    .and_then(Value::as_str)
-                    .unwrap_or(""),
-                false,
-            ),
-            Kind::Ollama => (
-                v.pointer("/message/content")
-                    .and_then(Value::as_str)
-                    .unwrap_or(""),
-                v.get("done").and_then(Value::as_bool).unwrap_or(false),
-            ),
-        };
-        if !delta.is_empty() {
-            full.push_str(delta);
-            on_delta(delta);
-        }
-        Ok(done)
     };
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| AiError::Connect(url(p, path), e.to_string()))?;
         buf.extend_from_slice(&chunk);
         while let Some(nl) = buf.iter().position(|&b| b == b'\n') {
             let line: Vec<u8> = buf.drain(..=nl).collect();
-            if handle_line(&String::from_utf8_lossy(&line), &mut full)? {
+            if handle(&String::from_utf8_lossy(&line), &mut full)? {
                 return Ok(full);
             }
         }
     }
     if !buf.is_empty() {
-        handle_line(&String::from_utf8_lossy(&buf), &mut full)?;
+        handle(&String::from_utf8_lossy(&buf), &mut full)?;
     }
     Ok(full)
+}
+
+/// 从模型列表接口的返回里取模型名，去重、排序
+fn parse_models(kind: Kind, v: &Value) -> Result<Vec<String>, AiError> {
+    let (list, field) = match kind {
+        Kind::Ollama => (v.get("models"), "name"),
+        _ => (v.get("data"), "id"),
+    };
+    let list = list
+        .and_then(Value::as_array)
+        .ok_or_else(|| AiError::Parse(v.to_string().chars().take(300).collect()))?;
+    let mut names: Vec<String> = list
+        .iter()
+        .filter_map(|m| m.get(field).and_then(Value::as_str))
+        .map(str::to_string)
+        .collect();
+    names.sort();
+    names.dedup();
+    Ok(names)
+}
+
+/// 服务商提供的模型列表（"同步模型列表"）
+pub async fn list_models(p: &Provider, key: Option<&str>) -> Result<Vec<String>, AiError> {
+    let path = match p.kind {
+        Kind::Openai | Kind::Anthropic => "models",
+        Kind::Ollama => "api/tags",
+        Kind::Codex => return Err(AiError::Unsupported),
+    };
+    parse_models(p.kind, &get(p, path, key).await?)
 }
 
 /// 文字转向量（问答检索用），按输入顺序返回
@@ -239,6 +372,7 @@ pub async fn embed(
             items.sort_by_key(|x| x.0);
             items.into_iter().map(|x| x.1).collect::<Vec<_>>()
         }
+        Kind::Anthropic | Kind::Codex => return Err(AiError::Unsupported),
         Kind::Ollama => {
             let v: Value = post(
                 p,
@@ -267,4 +401,129 @@ pub async fn embed(
         )));
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn provider(kind: Kind) -> Provider {
+        Provider {
+            kind,
+            base_url: "https://example.com/v1/".into(),
+            model: "m".into(),
+        }
+    }
+
+    fn msg(role: &str, content: &str) -> Message {
+        Message {
+            role: role.into(),
+            content: content.into(),
+        }
+    }
+
+    #[test]
+    fn anthropic_moves_system_out_of_messages() {
+        let (path, body) = chat_request(
+            &provider(Kind::Anthropic),
+            &[msg("system", "be brief"), msg("user", "hi")],
+        )
+        .unwrap();
+        assert_eq!(path, "messages");
+        assert_eq!(body["system"], "be brief");
+        assert_eq!(body["messages"].as_array().unwrap().len(), 1);
+        assert_eq!(body["messages"][0]["role"], "user");
+        assert!(body["max_tokens"].as_u64().unwrap() > 0);
+    }
+
+    #[test]
+    fn openai_and_ollama_keep_messages() {
+        let m = [msg("system", "s"), msg("user", "u")];
+        let (path, body) = chat_request(&provider(Kind::Openai), &m).unwrap();
+        assert_eq!(path, "chat/completions");
+        assert_eq!(body["messages"].as_array().unwrap().len(), 2);
+        let (path, _) = chat_request(&provider(Kind::Ollama), &m).unwrap();
+        assert_eq!(path, "api/chat");
+    }
+
+    #[test]
+    fn codex_is_not_supported_yet() {
+        assert!(matches!(
+            chat_request(&provider(Kind::Codex), &[msg("user", "u")]),
+            Err(AiError::Unsupported)
+        ));
+    }
+
+    #[test]
+    fn parses_openai_stream() {
+        let k = Kind::Openai;
+        assert_eq!(parse_line(k, "").unwrap(), Line::Skip);
+        assert_eq!(parse_line(k, ": keep-alive").unwrap(), Line::Skip);
+        assert_eq!(
+            parse_line(k, r#"data: {"choices":[{"delta":{"content":"Hi"}}]}"#).unwrap(),
+            Line::Delta("Hi".into())
+        );
+        assert_eq!(parse_line(k, "data: [DONE]").unwrap(), Line::Done);
+        assert!(parse_line(k, r#"data: {"error":{"message":"bad key"}}"#).is_err());
+    }
+
+    #[test]
+    fn parses_anthropic_stream() {
+        let k = Kind::Anthropic;
+        assert_eq!(
+            parse_line(k, "event: content_block_delta").unwrap(),
+            Line::Skip
+        );
+        assert_eq!(
+            parse_line(
+                k,
+                r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"你好"}}"#
+            )
+            .unwrap(),
+            Line::Delta("你好".into())
+        );
+        assert_eq!(
+            parse_line(k, r#"data: {"type":"message_start","message":{}}"#).unwrap(),
+            Line::Skip
+        );
+        assert_eq!(
+            parse_line(k, r#"data: {"type":"message_stop"}"#).unwrap(),
+            Line::Done
+        );
+        assert!(parse_line(
+            k,
+            r#"data: {"type":"error","error":{"type":"overloaded_error"}}"#
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn parses_ollama_stream() {
+        let k = Kind::Ollama;
+        assert_eq!(
+            parse_line(k, r#"{"message":{"content":"a"},"done":false}"#).unwrap(),
+            Line::Delta("a".into())
+        );
+        assert_eq!(
+            parse_line(k, r#"{"message":{"content":""},"done":true}"#).unwrap(),
+            Line::Done
+        );
+    }
+
+    #[test]
+    fn parses_model_lists() {
+        let openai = json!({ "data": [{ "id": "b" }, { "id": "a" }, { "id": "a" }] });
+        assert_eq!(parse_models(Kind::Openai, &openai).unwrap(), ["a", "b"]);
+        let ollama = json!({ "models": [{ "name": "qwen3:8b" }] });
+        assert_eq!(parse_models(Kind::Ollama, &ollama).unwrap(), ["qwen3:8b"]);
+        assert!(parse_models(Kind::Anthropic, &json!({ "oops": 1 })).is_err());
+    }
+
+    #[test]
+    fn joins_base_url_and_path() {
+        assert_eq!(
+            url(&provider(Kind::Openai), "/models"),
+            "https://example.com/v1/models"
+        );
+    }
 }

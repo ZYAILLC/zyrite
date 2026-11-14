@@ -64,7 +64,7 @@ The first time a program connects, Zyrite asks you to allow it. Grants are per v
 ### Built-in AI (bring your own model)
 
 - Rewrite a selection: polish, continue, shorten, translate, change tone, or give your own instruction. Results stream in below the original.
-- Works with any OpenAI-compatible API (OpenAI, DeepSeek and others) or a local Ollama model. Keys are stored in your system keychain, and requests go straight to your provider, never through a Zyrite server.
+- Built-in list of model services: DeepSeek, Qwen, Zhipu GLM, Kimi, Doubao, MiniMax, OpenAI, Anthropic, OpenRouter and more, plus Ollama, LM Studio and any OpenAI-compatible or Anthropic-compatible endpoint. Add several services, sync each one's model list, and pick which one rewrites. Keys are stored in your system keychain, and requests go straight to your provider, never through a Zyrite server.
 
 ### Make it yours
 
@@ -130,7 +130,7 @@ crates/zyrite-core/      Core library: file I/O (atomic save, external change de
                          watching, file operations), link and tag index, full-text search, recovery cache,
                          .zyrite/ data (baselines, pending reviews, annotations), vector index
 crates/zyrite-mcp/       MCP server (stdio, `zyrite mcp --vault <path> [--lang en|zh-CN]`)
-crates/zyrite-ai/        Model calls for the built-in AI (OpenAI-compatible APIs, Ollama; streaming, embeddings)
+crates/zyrite-ai/        Model calls for the built-in AI (OpenAI-compatible, Anthropic and Ollama protocols; streaming, model lists, embeddings)
 crates/zyrite-export/    Word (.docx) export
 crates/zyrite-i18n/      Language for backend messages: English by default, Simplified Chinese optional
 packages/md-blocks/      Markdown parsing, top-level block splitting, source positions, style detection

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { locale, t } from '../i18n';
 import { useApp } from '../store';
 import { deps } from './document';
-import { buildDocx, buildHtml } from './export';
+import { buildDocx, buildHtml, exportPdf } from './export';
 import { fakeBackend, resetStore } from './fakeBackend.testutil';
 
 let fake: ReturnType<typeof fakeBackend>;
@@ -75,5 +76,85 @@ describe('导出 Word 的文档结构', () => {
     expect(doc.blocks[5]).toMatchObject({ t: 'table', align: ['center', 'right'] });
     expect(doc.blocks[6]).toEqual({ t: 'code', lang: 'js', text: 'let a = 1;' });
     expect((doc.blocks[9] as { inlines: { text: string }[] }).inlines[0]!.text).toBe('[1] ');
+  });
+});
+
+describe('导出 PDF', () => {
+  beforeEach(() => {
+    useApp.setState({ filePath: '/v/a.md', text: '# 标题\n\n正文' });
+    fake.state.savePick = '/out/a.pdf';
+  });
+
+  it('选好位置后直接生成：带纸张、边距，页眉页脚在打印容器里，完成后移除容器', async () => {
+    useApp.setState({ exportPrefs: { paper: 'Letter', margin: 15, header: 'title', footer: 'date' } });
+    await exportPdf();
+    expect(fake.state.pdfs).toHaveLength(1);
+    const call = fake.state.pdfs[0]!;
+    expect(call.path).toBe('/out/a.pdf');
+    expect(call.page).toEqual({ paper: 'Letter', marginMm: 15, header: null, footer: null });
+    expect(call.printing).toBe(true);
+    expect(call.html).toContain('<h1>标题</h1>');
+    expect(call.html).toContain('<div class="zy-print-head">a</div>');
+    expect(call.html).toContain('zy-print-foot');
+    expect(fake.state.printed).toBe(0);
+    expect(document.getElementById('zy-print')).toBeNull();
+    expect(document.getElementById('zy-print-style')).toBeNull();
+    expect(document.documentElement.classList.contains('zy-printing')).toBe(false);
+    expect(useApp.getState().notice).toEqual({ text: t.exported('PDF', 'a.pdf'), error: false });
+  });
+
+  it('后端能在每页画页眉页脚时交给它，页面里不放', async () => {
+    fake.state.pdfHeaderFooter = true;
+    useApp.setState({ exportPrefs: { paper: 'A4', margin: 20, header: 'title', footer: 'date' } });
+    await exportPdf();
+    const call = fake.state.pdfs[0]!;
+    expect(call.page).toEqual({ paper: 'A4', marginMm: 20, header: 'a', footer: new Date().toLocaleDateString(locale) });
+    expect(call.html).not.toContain('zy-print-head');
+    expect(call.html).not.toContain('zy-print-foot');
+    expect(call.html).toContain('<h1>标题</h1>');
+  });
+
+  it('没开页眉页脚时两边都不放', async () => {
+    fake.state.pdfHeaderFooter = true;
+    await exportPdf();
+    expect(fake.state.pdfs[0]!.page).toMatchObject({ header: null, footer: null });
+  });
+
+  it('取消保存对话框时什么都不做', async () => {
+    fake.state.savePick = null;
+    await exportPdf();
+    expect(fake.state.pdfs).toHaveLength(0);
+    expect(fake.state.printed).toBe(0);
+    expect(useApp.getState().notice).toBeNull();
+  });
+
+  it('生成失败：提示错误，也移除打印容器', async () => {
+    fake.state.pdfAnswer = 'boom';
+    await exportPdf();
+    expect(useApp.getState().notice).toEqual({ text: t.exportFailed('PDF', 'boom'), error: true });
+    expect(document.getElementById('zy-print')).toBeNull();
+    expect(document.documentElement.classList.contains('zy-printing')).toBe(false);
+  });
+
+  it('WebView 不支持直接导出时退回打印对话框', async () => {
+    fake.state.pdfAnswer = false;
+    await exportPdf();
+    expect(fake.state.pdfs).toHaveLength(1);
+    expect(fake.state.printed).toBe(1);
+    expect(useApp.getState().notice).toBeNull();
+    // 打印对话框关闭后才移除容器
+    expect(document.getElementById('zy-print')).not.toBeNull();
+    window.dispatchEvent(new Event('afterprint'));
+    expect(document.getElementById('zy-print')).toBeNull();
+  });
+
+  it('后端没有直接导出（浏览器调试）时用打印对话框，不弹保存对话框', async () => {
+    delete fake.b.exportPdf;
+    fake.state.savePick = null;
+    await exportPdf();
+    expect(fake.state.printed).toBe(1);
+    expect(document.getElementById('zy-print')?.innerHTML).toContain('<h1>标题</h1>');
+    window.dispatchEvent(new Event('afterprint'));
+    expect(document.getElementById('zy-print')).toBeNull();
   });
 });

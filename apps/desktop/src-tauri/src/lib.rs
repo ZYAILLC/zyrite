@@ -7,6 +7,7 @@ mod access;
 mod ai;
 mod media;
 mod menu;
+mod pdf;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -585,6 +586,7 @@ pub fn run() {
             ai::ai_key_delete,
             ai::ai_chat,
             ai::ai_cancel,
+            ai::ai_models,
             ai::ai_index,
             ai::ai_retrieve,
             note_names,
@@ -601,6 +603,7 @@ pub fn run() {
             media::write_text,
             media::export_docx,
             media::print_window,
+            pdf::export_pdf,
             media::theme_list,
             media::theme_import,
             media::theme_remove,

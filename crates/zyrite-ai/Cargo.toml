@@ -1,6 +1,6 @@
 [package]
 name = "zyrite-ai"
-description = "Zyrite 内置 AI：OpenAI 兼容接口和 Ollama 的流式对话、向量"
+description = "Zyrite 内置 AI：OpenAI 兼容、Anthropic、Ollama 协议的流式对话、模型列表、向量"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

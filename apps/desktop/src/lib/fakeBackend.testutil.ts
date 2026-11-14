@@ -4,6 +4,7 @@ import {
   type Activity,
   type AgentInfo,
   type McpAccess,
+  type PdfPage,
   type AiEvent,
   type AiPassage,
   type Annotation,
@@ -58,12 +59,23 @@ export function fakeBackend() {
     keys: new Map<string, string>(),
     aiAnswer: '好的。',
     aiRequests: [] as { role: string; content: string }[][],
+    /** 发给 aiChat 的服务（检查不带模型列表这类界面字段） */
+    aiProviders: [] as unknown[],
+    /** aiModels 返回的模型列表；设成 Error 就报错 */
+    aiModels: ['model-b', 'model-a'] as string[] | Error,
+    aiModelRequests: [] as { provider: unknown; keyId: string }[],
     /** 写入的二进制文件（base64） */
     binaries: new Map<string, string>(),
     uploads: [] as string[],
     uploadUrl: 'https://img.example/x.png',
     exported: new Map<string, unknown>(),
     printed: 0,
+    /** 直接导出 PDF 的调用：页面设置，以及调用时打印容器的内容 */
+    pdfs: [] as { path: string; page: PdfPage; printing: boolean; html: string }[],
+    /** 直接导出 PDF 的结果：true 成功，false 不支持，字符串表示出错 */
+    pdfAnswer: true as boolean | string,
+    /** 后端是否自己在每页画页眉页脚（像 macOS 那样） */
+    pdfHeaderFooter: false,
     clipboardImage: null as string | null,
     themes: new Map<string, string>(),
     passages: [] as AiPassage[],
@@ -152,6 +164,20 @@ export function fakeBackend() {
     },
     async exportDocx(path, doc) {
       state.exported.set(path, doc);
+    },
+    get pdfHeaderFooter() {
+      return state.pdfHeaderFooter;
+    },
+    async exportPdf(path, page) {
+      state.pdfs.push({
+        path,
+        page,
+        printing: document.documentElement.classList.contains('zy-printing'),
+        html: document.getElementById('zy-print')?.innerHTML ?? '',
+      });
+      if (typeof state.pdfAnswer === 'string') throw new Error(state.pdfAnswer);
+      if (state.pdfAnswer) state.exported.set(path, 'pdf');
+      return state.pdfAnswer;
     },
     async printWindow() {
       state.printed++;
@@ -300,8 +326,9 @@ export function fakeBackend() {
     async aiKeyDelete(id) {
       state.keys.delete(id);
     },
-    async aiChat(id, _p, _k, messages) {
+    async aiChat(id, p, _k, messages) {
       state.aiRequests.push(messages);
+      state.aiProviders.push(p);
       // 把回答拆成两段推送
       setTimeout(() => {
         const answer = state.aiAnswer;
@@ -312,6 +339,11 @@ export function fakeBackend() {
       }, 0);
     },
     async aiCancel() {},
+    async aiModels(provider, keyId) {
+      state.aiModelRequests.push({ provider, keyId });
+      if (state.aiModels instanceof Error) throw state.aiModels;
+      return [...state.aiModels];
+    },
     async onAiEvent(fn) {
       aiListeners.add(fn);
       return () => aiListeners.delete(fn);
